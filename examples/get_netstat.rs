@@ -18,7 +18,7 @@ fn main() {
         Ok(sockets) => {
             // If successful, iterate over the returned sockets and print their information.
             for socket in sockets {
-                // Print the socket information
+                // Print the socket and process information
                 match socket.protocol_socket_info {
                     ProtocolSocketInfo::Tcp(tcp_socket) => println!(
                         "[TCP] {}:{} -> {}:{} {:?} - [{}]",
