@@ -2,6 +2,7 @@
 // for both IPv4 and IPv6 addresses and for TCP and UDP protocols.
 use netsock::family::AddressFamilyFlags;
 use netsock::protocol::ProtocolFlags; 
+use netsock::socket::ProtocolSocketInfo;
 use netsock::get_sockets;
 
 fn main() {
@@ -17,7 +18,22 @@ fn main() {
         Ok(sockets) => {
             // If successful, iterate over the returned sockets and print their information.
             for socket in sockets {
-                println!("{:?}", socket);
+                // Print the socket information
+                match socket.protocol_socket_info {
+                    ProtocolSocketInfo::Tcp(tcp_socket) => println!(
+                        "[TCP] {}:{} -> {}:{} {:?} - [{}]",
+                        tcp_socket.local_addr,
+                        tcp_socket.local_port,
+                        tcp_socket.remote_addr,
+                        tcp_socket.remote_port,
+                        socket.processes,
+                        tcp_socket.state
+                    ),
+                    ProtocolSocketInfo::Udp(udp_socket) => println!(
+                        "[UDP] {}:{} -> *:* {:?}",
+                        udp_socket.local_addr, udp_socket.local_port, socket.processes
+                    ),
+                }
             }
         }
         Err(e) => {
