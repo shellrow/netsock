@@ -8,3 +8,6 @@ pub mod error;
 
 pub use sys::get_sockets;
 pub use sys::iterate_sockets;
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub use sys::iterate_sockets_without_processes;
