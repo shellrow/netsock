@@ -1,6 +1,6 @@
 [package]
 name = "netsock"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["shellrow <shellrow@foctet.com>"]
 description = "Cross-platform library for network sockets information"
@@ -14,15 +14,27 @@ categories = ["network-programming", "os"]
 libc = "0.2"
 bitflags = "2.5"
 thiserror = "1.0"
+serde = { version = "1", features = ["derive"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 num-derive = "0.4"
 num-traits = "0.2"
-byteorder = "1.5.0"
+byteorder = "1.5"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.54.0", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }
 
+[dev-dependencies]
+serde_json = "1.0"
+
+[features]
+serde = ["dep:serde"]
+
 [[example]]
 name = "get_netstat"
 path = "examples/get_netstat.rs"
+
+[[example]]
+name = "serialize"
+path = "examples/serialize.rs"
+required-features = ["serde"]

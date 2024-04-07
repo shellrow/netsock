@@ -1,8 +1,8 @@
 #![allow(non_camel_case_types)]
 
-use libc::*;
 #[allow(unused_imports)]
 use crate::sys::linux::ffi::types::*;
+use libc::*;
 
 pub const SOCK_DIAG_BY_FAMILY: __u16 = 20;
 pub type INET_DIAG_TYPE = c_int;

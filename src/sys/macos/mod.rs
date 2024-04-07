@@ -3,11 +3,11 @@ mod ffi;
 mod netstat;
 mod proc;
 
-use crate::sys::macos::netstat::*;
 use crate::error::Error;
-use crate::socket::SocketInfo;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
+use crate::socket::SocketInfo;
+use crate::sys::macos::netstat::*;
 
 /// Iterates over socket information based on the specified address family and protocol flags.
 ///
@@ -35,7 +35,7 @@ use crate::protocol::ProtocolFlags;
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///
-/// if let Ok(socket_iter) = iterate_sockets(af_flags, proto_flags) {
+/// if let Ok(socket_iter) = iter_sockets(af_flags, proto_flags) {
 ///     for socket_info in socket_iter {
 ///         match socket_info {
 ///             Ok(info) => println!("Found socket: {:?}", info),
@@ -44,7 +44,7 @@ use crate::protocol::ProtocolFlags;
 ///     }
 /// }
 /// ```
-pub fn iterate_sockets(
+pub fn iter_sockets(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {

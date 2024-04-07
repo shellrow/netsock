@@ -5,12 +5,12 @@ mod ext;
 mod netlink_iter;
 mod procfs;
 
+use crate::error::Error;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::linux::netlink_iter::*;
 use crate::sys::linux::procfs::*;
-use crate::error::Error;
 use libc::*;
 
 /// Iterates over socket information based on the specified address family and protocol flags.
@@ -39,7 +39,7 @@ use libc::*;
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///
-/// if let Ok(socket_iter) = iterate_sockets(af_flags, proto_flags) {
+/// if let Ok(socket_iter) = iter_sockets(af_flags, proto_flags) {
 ///     for socket_info in socket_iter {
 ///         match socket_info {
 ///             Ok(info) => println!("Found socket: {:?}", info),
@@ -48,20 +48,20 @@ use libc::*;
 ///     }
 /// }
 /// ```
-pub fn iterate_sockets(
+pub fn iter_sockets(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
-    Ok(set_processes(iterate_sockets_without_processes(
+    Ok(set_processes(iter_sockets_without_processes(
         af_flags,
         proto_flags,
     )?))
 }
 
 /// Iterates over socket information based on the specified address family and protocol flags.
-/// 
+///
 /// without process info.
-pub fn iterate_sockets_without_processes(
+pub fn iter_sockets_without_processes(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
@@ -98,7 +98,8 @@ fn set_processes(
     sockets_info.map(move |r| {
         r.map(|socket_info| SocketInfo {
             processes: inode_proc_map
-            .remove(&socket_info.inode).unwrap_or(Vec::new()),
+                .remove(&socket_info.inode)
+                .unwrap_or(Vec::new()),
             ..socket_info
         })
     })

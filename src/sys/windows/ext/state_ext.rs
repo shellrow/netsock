@@ -1,5 +1,5 @@
-use crate::sys::windows::ffi;
 use crate::state::TcpState;
+use crate::sys::windows::ffi;
 
 impl From<ffi::DWORD> for TcpState {
     fn from(tcp_state: ffi::DWORD) -> TcpState {

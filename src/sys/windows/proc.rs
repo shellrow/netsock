@@ -7,9 +7,8 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 };
 
 pub fn get_process_name(pid: u32) -> Result<String, Box<dyn std::error::Error>> {
-    let h = unsafe { 
-        CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok() 
-    }.ok_or("Failed to create snapshot")?;
+    let h = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok() }
+        .ok_or("Failed to create snapshot")?;
 
     let mut process = unsafe { zeroed::<PROCESSENTRY32>() };
     process.dwSize = u32::try_from(size_of::<PROCESSENTRY32>())?;
@@ -27,7 +26,7 @@ pub fn get_process_name(pid: u32) -> Result<String, Box<dyn std::error::Error>> 
         }
     }
 
-    unsafe { 
+    unsafe {
         match CloseHandle(h).ok() {
             Some(_) => (),
             None => return Err("Failed to close handle".into()),
@@ -35,7 +34,10 @@ pub fn get_process_name(pid: u32) -> Result<String, Box<dyn std::error::Error>> 
     }
 
     let name = process.szExeFile;
-    let len = name.iter().position(|&x| x == 0).ok_or("Invalid process name")?;
+    let len = name
+        .iter()
+        .position(|&x| x == 0)
+        .ok_or("Invalid process name")?;
     match String::from_utf8(name[0..len].iter().map(|e| *e as u8).collect()) {
         Ok(name) => Ok(name),
         Err(_) => Err("Invalid UTF sequence for process name".into()),

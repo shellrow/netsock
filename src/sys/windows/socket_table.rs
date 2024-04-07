@@ -1,8 +1,8 @@
+use crate::error::*;
 use crate::socket::{ProtocolSocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
-use crate::{socket::SocketInfo, sys::windows::ffi::*};
 use crate::sys::windows::socket_table_extended::SocketTable;
-use crate::error::*;
+use crate::{socket::SocketInfo, sys::windows::ffi::*};
 use std::net::{IpAddr, Ipv4Addr};
 
 impl SocketTable for MIB_TCPTABLE {

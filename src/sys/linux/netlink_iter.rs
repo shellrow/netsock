@@ -1,7 +1,7 @@
+use crate::error::*;
 use crate::socket::{ProtocolSocketInfo, SocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
 use crate::sys::linux::ffi::*;
-use crate::error::*;
 use libc::*;
 use std;
 use std::io;
