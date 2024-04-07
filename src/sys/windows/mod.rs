@@ -38,7 +38,7 @@ use crate::sys::windows::socket_table_iterator::SocketTableIterator;
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///
-/// if let Ok(socket_iter) = iterate_sockets(af_flags, proto_flags) {
+/// if let Ok(socket_iter) = iter_sockets(af_flags, proto_flags) {
 ///     for socket_info in socket_iter {
 ///         match socket_info {
 ///             Ok(info) => println!("Found socket: {:?}", info),
@@ -47,7 +47,7 @@ use crate::sys::windows::socket_table_iterator::SocketTableIterator;
 ///     }
 /// }
 /// ```
-pub fn iterate_sockets(
+pub fn iter_sockets(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
@@ -101,7 +101,7 @@ pub fn iterate_sockets(
 /// # Examples
 /// ```
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
-/// match iterate_sockets_without_processes(proto_flags) {
+/// match iter_sockets_without_processes(proto_flags) {
 ///     Ok(sockets) => {
 ///         for socket in sockets {
 ///             match socket {
@@ -116,7 +116,7 @@ pub fn iterate_sockets(
 ///
 /// Note that this function is Windows-specific and is intended to work with older versions
 /// of the operating system.
-pub fn iterate_sockets_without_processes(
+pub fn iter_sockets_without_processes(
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
     let tcp = proto_flags.contains(ProtocolFlags::TCP);

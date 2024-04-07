@@ -7,7 +7,7 @@ pub mod state;
 mod sys;
 
 pub use sys::get_sockets;
-pub use sys::iterate_sockets;
+pub use sys::iter_sockets;
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-pub use sys::iterate_sockets_without_processes;
+pub use sys::iter_sockets_without_processes;

@@ -8,7 +8,7 @@ use crate::sys::*;
 ///
 /// This function collects socket information into a vector, allowing the caller to obtain a
 /// comprehensive list of sockets that match the specified address family and protocol criteria.
-/// It's a convenient wrapper around `iterate_sockets` for when you need to work with all sockets
+/// It's a convenient wrapper around `iter_sockets` for when you need to work with all sockets
 /// at once, rather than iterating over them.
 ///
 /// # Parameters
@@ -45,5 +45,5 @@ pub fn get_sockets(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<Vec<SocketInfo>, Error> {
-    iterate_sockets(af_flags, proto_flags)?.collect()
+    iter_sockets(af_flags, proto_flags)?.collect()
 }
