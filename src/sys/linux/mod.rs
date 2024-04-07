@@ -5,12 +5,12 @@ mod ext;
 mod netlink_iter;
 mod procfs;
 
+use crate::error::Error;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::linux::netlink_iter::*;
 use crate::sys::linux::procfs::*;
-use crate::error::Error;
 use libc::*;
 
 /// Iterates over socket information based on the specified address family and protocol flags.
@@ -59,7 +59,7 @@ pub fn iterate_sockets(
 }
 
 /// Iterates over socket information based on the specified address family and protocol flags.
-/// 
+///
 /// without process info.
 pub fn iterate_sockets_without_processes(
     af_flags: AddressFamilyFlags,
@@ -98,7 +98,8 @@ fn set_processes(
     sockets_info.map(move |r| {
         r.map(|socket_info| SocketInfo {
             processes: inode_proc_map
-            .remove(&socket_info.inode).unwrap_or(Vec::new()),
+                .remove(&socket_info.inode)
+                .unwrap_or(Vec::new()),
             ..socket_info
         })
     })

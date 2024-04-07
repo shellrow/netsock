@@ -1,9 +1,9 @@
 // This example demonstrates how to use the `netsock` crate to retrieve socket information
 // for both IPv4 and IPv6 addresses and for TCP and UDP protocols.
 use netsock::family::AddressFamilyFlags;
-use netsock::protocol::ProtocolFlags; 
-use netsock::socket::ProtocolSocketInfo;
 use netsock::get_sockets;
+use netsock::protocol::ProtocolFlags;
+use netsock::socket::ProtocolSocketInfo;
 
 fn main() {
     // Combine IPv4 and IPv6 address family flags to search for sockets across both families.

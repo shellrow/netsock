@@ -12,13 +12,13 @@ use byteorder::{ByteOrder, NetworkEndian};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use crate::process::Process;
-use crate::sys::macos::ffi::libproc::*;
 use crate::error::Error;
 use crate::family::AddressFamilyFlags;
+use crate::process::Process;
 use crate::protocol::ProtocolFlags;
-use crate::socket::{SocketInfo, TcpSocketInfo, UdpSocketInfo, ProtocolSocketInfo};
+use crate::socket::{ProtocolSocketInfo, SocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
+use crate::sys::macos::ffi::libproc::*;
 
 use super::proc::get_process_name;
 

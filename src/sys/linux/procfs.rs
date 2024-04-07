@@ -5,20 +5,14 @@ use crate::process::Process;
 
 pub fn get_process_name(pid: u32) -> String {
     let path_buf = match read_link(format!("/proc/{}/exe", pid)) {
-        Ok(path_buf) => {
-            path_buf
-        },
+        Ok(path_buf) => path_buf,
         Err(_) => {
             return String::new();
-        },
+        }
     };
     match path_buf.file_name() {
-        Some(os_str) => {
-            os_str.to_string_lossy().to_string()
-        },
-        None => {
-            String::new()
-        }
+        Some(os_str) => os_str.to_string_lossy().to_string(),
+        None => String::new(),
     }
 }
 

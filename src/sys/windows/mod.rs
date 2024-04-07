@@ -1,16 +1,16 @@
-mod ffi;
 mod ext;
+mod ffi;
+mod proc;
 mod socket_table;
 mod socket_table_extended;
 mod socket_table_iterator;
-mod proc;
 
+use crate::error::*;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::windows::ffi::*;
 use crate::sys::windows::socket_table_iterator::SocketTableIterator;
-use crate::error::*;
 
 /// Iterates over socket information based on the specified address family and protocol flags.
 ///

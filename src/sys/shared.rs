@@ -1,8 +1,8 @@
-use crate::sys::*;
 use crate::error::Error;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
+use crate::sys::*;
 
 /// Retrieves a list of socket information filtered by address family and protocol flags.
 ///

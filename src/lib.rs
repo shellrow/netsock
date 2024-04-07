@@ -1,10 +1,10 @@
-mod sys;
+pub mod error;
 pub mod family;
+pub mod process;
 pub mod protocol;
 pub mod socket;
-pub mod process;
 pub mod state;
-pub mod error;
+mod sys;
 
 pub use sys::get_sockets;
 pub use sys::iterate_sockets;

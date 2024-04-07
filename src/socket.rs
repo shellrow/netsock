@@ -1,5 +1,5 @@
-use crate::state::TcpState;
 use crate::process::Process;
+use crate::state::TcpState;
 use std::net::IpAddr;
 
 /// Represents general information about a socket, encompassing both protocol-specific details
@@ -10,7 +10,7 @@ pub struct SocketInfo {
     pub protocol_socket_info: ProtocolSocketInfo,
     /// Lists processes associated with the socket, providing a connection between the socket
     /// and the processes utilizing it.
-    pub processes : Vec<Process>,
+    pub processes: Vec<Process>,
     #[cfg(any(target_os = "linux", target_os = "android"))]
     /// Represents the inode number of the socket on Linux or Android systems, offering a unique
     /// identifier in the filesystem's context.

@@ -3,11 +3,11 @@ mod ffi;
 mod netstat;
 mod proc;
 
-use crate::sys::macos::netstat::*;
 use crate::error::Error;
-use crate::socket::SocketInfo;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
+use crate::socket::SocketInfo;
+use crate::sys::macos::netstat::*;
 
 /// Iterates over socket information based on the specified address family and protocol flags.
 ///
