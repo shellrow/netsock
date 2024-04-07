@@ -1,5 +1,8 @@
 use std::fmt;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Represents the various states of a TCP connection.
 ///
 /// Each state in this enumeration corresponds to a specific phase in the lifecycle of a TCP
@@ -21,6 +24,7 @@ use std::fmt;
 /// - `DeleteTcb`: Waiting to delete the TCP control block after sending a connection termination request.
 /// - `Unknown`: The state of the TCP connection is unknown or not applicable.
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TcpState {
     Closed,
     Listen,
