@@ -12,8 +12,8 @@ categories = ["network-programming", "os"]
 
 [dependencies]
 libc = "0.2"
-bitflags = "2.5"
-thiserror = "1.0"
+bitflags = "2.6"
+thiserror = "2.0"
 serde = { version = "1", features = ["derive"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
