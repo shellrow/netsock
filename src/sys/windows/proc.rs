@@ -1,35 +1,42 @@
 use std::mem::size_of;
 use std::mem::zeroed;
 
-use windows::Win32::Foundation::CloseHandle;
-use windows::Win32::System::Diagnostics::ToolHelp::{
+use windows_sys::Win32::Foundation::CloseHandle;
+use windows_sys::Win32::Foundation::FALSE;
+use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
 };
 
 pub fn get_process_name(pid: u32) -> Result<String, Box<dyn std::error::Error>> {
-    let h = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok() }
-        .ok_or("Failed to create snapshot")?;
+    let h = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if h == INVALID_HANDLE_VALUE {
+        return Err("Failed to create snapshot".into());
+    }
 
     let mut process = unsafe { zeroed::<PROCESSENTRY32>() };
     process.dwSize = u32::try_from(size_of::<PROCESSENTRY32>())?;
 
-    if unsafe { Process32First(h, &mut process) }.is_ok() {
-        loop {
-            if unsafe { Process32Next(h, &mut process) }.is_ok() {
-                let id: u32 = process.th32ProcessID;
-                if id == pid {
-                    break;
+    unsafe {
+        if Process32First(h, &mut process) != FALSE {
+            loop {
+                if Process32Next(h, &mut process) != FALSE {
+                    let id: u32 = process.th32ProcessID;
+                    if id == pid {
+                        break;
+                    }
+                } else {
+                    return Err("Failed to get process name".into());
                 }
-            } else {
-                return Err("Failed to get process name".into());
             }
+        } else {
+            return Err("Failed to get first process".into());
         }
     }
 
     unsafe {
-        match CloseHandle(h).ok() {
-            Some(_) => (),
-            None => return Err("Failed to close handle".into()),
+        if CloseHandle(h) == FALSE {
+            return Err("Failed to close handle".into());
         }
     }
 

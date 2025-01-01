@@ -6,7 +6,7 @@ use thiserror::Error;
 pub enum Error {
     /// Represents a generic OS-level error.
     #[error("Failed to call ffi")]
-    OsError(io::Error),
+    OsError(#[from] io::Error),
 
     /// Occurs when an unsupported socket family is specified.
     #[error("Unsupported SocketFamily {0}")]
@@ -47,6 +47,14 @@ pub enum Error {
     /// Represents a NetLink error.
     #[error("NetLink Error")]
     NetLinkError,
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[error("NetLink Error")]
+    NetLinkPacketError(netlink_packet_core::error::ErrorMessage),
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[error("NetLink Decode Error")]
+    NetLinkPacketDecodeError(#[from] netlink_packet_utils::errors::DecodeError),
 
     /// Used when an unknown protocol is found.
     #[error("Found unknown protocol {0}")]
