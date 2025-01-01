@@ -1,6 +1,3 @@
-#[macro_use]
-mod ffi;
-
 mod ext;
 mod netlink_iter;
 mod procfs;
@@ -11,7 +8,7 @@ use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::linux::netlink_iter::*;
 use crate::sys::linux::procfs::*;
-use libc::*;
+use netlink_packet_sock_diag::{AF_INET, AF_INET6, IPPROTO_TCP, IPPROTO_UDP};
 
 /// Iterates over socket information based on the specified address family and protocol flags.
 ///
@@ -70,22 +67,20 @@ pub fn iter_sockets_without_processes(
     let tcp = proto_flags.contains(ProtocolFlags::TCP);
     let udp = proto_flags.contains(ProtocolFlags::UDP);
     let mut iterators = Vec::with_capacity(4);
-    unsafe {
-        if ipv4 {
-            if tcp {
-                iterators.push(NetlinkIterator::new(AF_INET as u8, IPPROTO_TCP as u8)?);
-            }
-            if udp {
-                iterators.push(NetlinkIterator::new(AF_INET as u8, IPPROTO_UDP as u8)?);
-            }
+    if ipv4 {
+        if tcp {
+            iterators.push(NetlinkIterator::new(AF_INET as u8, IPPROTO_TCP as u8)?);
         }
-        if ipv6 {
-            if tcp {
-                iterators.push(NetlinkIterator::new(AF_INET6 as u8, IPPROTO_TCP as u8)?);
-            }
-            if udp {
-                iterators.push(NetlinkIterator::new(AF_INET6 as u8, IPPROTO_UDP as u8)?);
-            }
+        if udp {
+            iterators.push(NetlinkIterator::new(AF_INET as u8, IPPROTO_UDP as u8)?);
+        }
+    }
+    if ipv6 {
+        if tcp {
+            iterators.push(NetlinkIterator::new(AF_INET6 as u8, IPPROTO_TCP as u8)?);
+        }
+        if udp {
+            iterators.push(NetlinkIterator::new(AF_INET6 as u8, IPPROTO_UDP as u8)?);
         }
     }
     Ok(iterators.into_iter().flatten())
