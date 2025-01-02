@@ -1,8 +1,8 @@
 [package]
 name = "netsock"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
-authors = ["shellrow <shellrow@foctet.com>"]
+authors = ["shellrow <shellrow@fortnium.com>"]
 description = "Cross-platform library for network sockets information"
 readme = "README.md"
 repository = "https://github.com/shellrow/netsock"
