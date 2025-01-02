@@ -22,7 +22,7 @@ Cross-platform library for network sockets information.
 Add `netsock` to your dependencies  
 ```toml:Cargo.toml
 [dependencies]
-netsock = "0.2"
+netsock = "0.3"
 ```
 
 For more details, see [examples][examples-url] or [doc][doc-url].  
@@ -75,4 +75,4 @@ fn main() {
 
 ## Inspired by
 - [netstat](https://crates.io/crates/netstat): unmaintained
-- [netstat2](https://crates.io/crates/netstat2): unmaintained
+- [netstat2](https://crates.io/crates/netstat2)
