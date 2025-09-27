@@ -1,6 +1,9 @@
+use log::warn;
 use std::collections::HashMap;
 use std::fs::{read_dir, read_link};
+use std::sync::Arc;
 
+use crate::error::Error;
 use crate::process::Process;
 
 pub fn get_process_name(pid: u32) -> String {
@@ -16,43 +19,112 @@ pub fn get_process_name(pid: u32) -> String {
     }
 }
 
-pub fn build_inode_proc_map() -> HashMap<u32, Vec<Process>> {
-    let pids = read_dir("/proc/")
-        .expect("Can't read /proc/")
-        .filter_map(|d| d.ok()?.file_name().to_str()?.parse::<u32>().ok());
+pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
+    let entries = read_dir("/proc/").map_err(Error::FailedToListProcesses)?;
     let mut pid_by_inode: HashMap<u32, Vec<Process>> = HashMap::new();
-    for pid in pids {
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                warn!("Failed to read /proc entry: {err}");
+                continue;
+            }
+        };
+
+        let pid = match entry
+            .file_name()
+            .to_str()
+            .and_then(|s| s.parse::<u32>().ok())
+        {
+            Some(pid) => pid,
+            None => continue,
+        };
+
         let name = get_process_name(pid);
-        if let Result::Ok(fds) = read_dir(format!("/proc/{}/fd", pid)) {
-            let inodes = fds.filter_map(|fd| {
-                let fd_file_name = fd.ok()?.file_name();
-                let fd_str = fd_file_name.to_str()?;
-                let path_buf = read_link(format!("/proc/{}/fd/{}", pid, fd_str)).ok()?;
-                let link_str = path_buf.to_str()?;
-                if link_str.starts_with("socket:[") {
-                    let inode_str = &link_str[8..link_str.len() - 1];
-                    inode_str.parse::<u32>().ok()
-                } else {
-                    Option::None
+
+        let fd_entries = match read_dir(entry.path().join("fd")) {
+            Ok(entries) => entries,
+            Err(err) => {
+                warn!("Failed to read file descriptors for pid {pid}: {err}");
+                continue;
+            }
+        };
+
+        for fd in fd_entries {
+            let fd = match fd {
+                Ok(fd) => fd,
+                Err(err) => {
+                    warn!("Failed to inspect descriptor for pid {pid}: {err}");
+                    continue;
                 }
-            });
-            for inode in inodes {
+            };
+
+            let link_path = match read_link(fd.path()) {
+                Ok(path) => path,
+                Err(err) => {
+                    warn!("Failed to read descriptor link for pid {pid}: {err}");
+                    continue;
+                }
+            };
+
+            let link_str = match link_path.to_str() {
+                Some(link) => link,
+                None => continue,
+            };
+
+            if let Some(inode) = link_str
+                .strip_prefix("socket:[")
+                .and_then(|rest| rest.strip_suffix(']'))
+                .and_then(|inode| inode.parse::<u32>().ok())
+            {
                 pid_by_inode
                     .entry(inode)
-                    .and_modify(|v: &mut Vec<Process>| {
-                        v.push(Process {
-                            pid: pid,
-                            name: name.clone(),
-                        })
-                    })
-                    .or_insert_with(|| {
-                        vec![Process {
-                            pid: pid,
-                            name: name.clone(),
-                        }]
+                    .or_insert_with(Vec::new)
+                    .push(Process {
+                        pid,
+                        name: name.clone(),
                     });
             }
         }
     }
-    pid_by_inode
+
+    Ok(pid_by_inode)
+}
+
+#[derive(Clone, Default)]
+pub struct ProcessCache {
+    inner: Arc<HashMap<u32, Arc<[Process]>>>,
+}
+
+impl ProcessCache {
+    pub fn snapshot() -> Result<Self, Error> {
+        let map = build_inode_proc_map()?;
+        Ok(Self::from_map(map))
+    }
+
+    pub fn refresh(&mut self) -> Result<(), Error> {
+        *self = Self::snapshot()?;
+        Ok(())
+    }
+
+    pub fn clone_processes(&self, inode: u32) -> Vec<Process> {
+        self.inner
+            .get(&inode)
+            .map(|processes| processes.as_ref().to_vec())
+            .unwrap_or_default()
+    }
+
+    pub fn processes(&self, inode: u32) -> Option<Arc<[Process]>> {
+        self.inner.get(&inode).cloned()
+    }
+
+    fn from_map(map: HashMap<u32, Vec<Process>>) -> Self {
+        let converted = map
+            .into_iter()
+            .map(|(inode, processes)| (inode, Arc::<[Process]>::from(processes)))
+            .collect();
+        Self {
+            inner: Arc::new(converted),
+        }
+    }
 }

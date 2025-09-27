@@ -1,6 +1,7 @@
 use crate::error::*;
 use crate::socket::{ProtocolSocketInfo, SocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
+use log::warn;
 
 use netlink_packet_core::{
     NetlinkHeader, NetlinkMessage, NetlinkPayload, NLM_F_DUMP, NLM_F_REQUEST,
@@ -73,15 +74,20 @@ impl NetlinkIterator {
 
             let bytes = &self.recv_buf[self.offset..self.size];
 
-            let rx_packet: NetlinkMessage<SockDiagMessage> =
-                match NetlinkMessage::deserialize(bytes) {
-                    Ok(rx_packet) => rx_packet,
-                    Err(e) => {
-                        // Avoid endless loop in case of a deserialization failure.
-                        self.is_done = true;
-                        return Err(Error::from(e));
-                    }
-                };
+            let rx_packet: NetlinkMessage<SockDiagMessage> = match NetlinkMessage::deserialize(
+                bytes,
+            ) {
+                Ok(rx_packet) => rx_packet,
+                Err(e) => {
+                    warn!(
+                            "Failed to deserialize netlink message for protocol {} ({} bytes remaining): {e}",
+                            self.protocol,
+                            bytes.len()
+                        );
+                    self.offset = self.size;
+                    continue;
+                }
+            };
             self.offset += rx_packet.header.length as usize;
 
             match rx_packet.payload {
@@ -92,6 +98,10 @@ impl NetlinkIterator {
                 NetlinkPayload::Done(_) => {
                     self.is_done = true;
                     return Ok(None);
+                }
+                NetlinkPayload::Error(err) => {
+                    self.is_done = true;
+                    return Err(Error::NetLinkPacketError(err));
                 }
                 _ => return Ok(None),
             }

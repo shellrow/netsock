@@ -1,8 +1,8 @@
 [package]
 name = "netsock"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
-authors = ["shellrow <shellrow@fortnium.com>"]
+authors = ["shellrow <shellrow@foctal.com>"]
 description = "Cross-platform library for network sockets information"
 readme = "README.md"
 repository = "https://github.com/shellrow/netsock"
@@ -11,8 +11,9 @@ keywords = ["network", "socket"]
 categories = ["network-programming", "os"]
 
 [dependencies]
-bitflags = "2.6"
+bitflags = "2.9"
 thiserror = "2.0"
+log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
