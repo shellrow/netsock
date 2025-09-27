@@ -2,7 +2,7 @@
 name = "netsock"
 version = "0.3.0"
 edition = "2021"
-authors = ["shellrow <shellrow@fortnium.com>"]
+authors = ["shellrow <shellrow@foctal.com>"]
 description = "Cross-platform library for network sockets information"
 readme = "README.md"
 repository = "https://github.com/shellrow/netsock"
