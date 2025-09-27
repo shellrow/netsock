@@ -19,20 +19,14 @@ bitflags! {
     ///
     /// # Examples
     /// ```
-    /// use your_crate::AddressFamilyFlags;
+    /// use netsock::family::AddressFamilyFlags;
     ///
     /// // Specify that an operation supports both IPv4 and IPv6 addresses.
     /// let flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
     ///
     /// // Check if IPv4 is supported.
-    /// if flags.contains(AddressFamilyFlags::IPV4) {
-    ///     println!("Supports IPv4");
-    /// }
-    ///
-    /// // Check if IPv6 is supported.
-    /// if flags.contains(AddressFamilyFlags::IPV6) {
-    ///     println!("Supports IPv6");
-    /// }
+    /// assert!(flags.contains(AddressFamilyFlags::IPV4));
+    /// assert!(flags.contains(AddressFamilyFlags::IPV6));
     /// ```
     pub struct AddressFamilyFlags: u8 {
         const IPV4 = 0b00000001;
