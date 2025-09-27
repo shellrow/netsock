@@ -4,15 +4,15 @@ use crate::state::TcpState;
 use log::warn;
 
 use netlink_packet_core::{
-    NetlinkHeader, NetlinkMessage, NetlinkPayload, NLM_F_DUMP, NLM_F_REQUEST,
+    NLM_F_DUMP, NLM_F_REQUEST, NetlinkHeader, NetlinkMessage, NetlinkPayload,
 };
 use netlink_packet_sock_diag::inet::InetResponse;
 use netlink_packet_sock_diag::{
+    SockDiagMessage,
     constants::*,
     inet::{ExtensionFlags, InetRequest, SocketId, StateFlags},
-    SockDiagMessage,
 };
-use netlink_sys::{protocols::NETLINK_SOCK_DIAG, Socket, SocketAddr};
+use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_SOCK_DIAG};
 
 const SOCKET_BUFFER_SIZE: usize = 8192;
 
@@ -80,10 +80,10 @@ impl NetlinkIterator {
                 Ok(rx_packet) => rx_packet,
                 Err(e) => {
                     warn!(
-                            "Failed to deserialize netlink message for protocol {} ({} bytes remaining): {e}",
-                            self.protocol,
-                            bytes.len()
-                        );
+                        "Failed to deserialize netlink message for protocol {} ({} bytes remaining): {e}",
+                        self.protocol,
+                        bytes.len()
+                    );
                     self.offset = self.size;
                     continue;
                 }

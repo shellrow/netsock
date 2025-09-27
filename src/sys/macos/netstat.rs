@@ -1,7 +1,7 @@
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use libproc::file_info::{pidfdinfo, ListFDs, ProcFDInfo, ProcFDType};
+use libproc::file_info::{ListFDs, ProcFDInfo, ProcFDType, pidfdinfo};
 use libproc::net_info::SocketFDInfo;
 use libproc::proc_pid::{listpidinfo, pidinfo};
 use libproc::processes::ProcFilter;
