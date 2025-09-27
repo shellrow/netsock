@@ -1,7 +1,7 @@
+use log::warn;
 use std::collections::HashMap;
 use std::fs::{read_dir, read_link};
 use std::sync::Arc;
-use log::warn;
 
 use crate::error::Error;
 use crate::process::Process;

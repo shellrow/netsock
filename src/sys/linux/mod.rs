@@ -2,13 +2,13 @@ mod ext;
 mod netlink_iter;
 mod procfs;
 
-pub use procfs::ProcessCache;
 use crate::error::Error;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::linux::netlink_iter::*;
 use netlink_packet_sock_diag::{AF_INET, AF_INET6, IPPROTO_TCP, IPPROTO_UDP};
+pub use procfs::ProcessCache;
 
 struct ProcessAttached<I> {
     inner: I,
