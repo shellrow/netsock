@@ -13,6 +13,7 @@ categories = ["network-programming", "os"]
 [dependencies]
 bitflags = "2.6"
 thiserror = "2.0"
+log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]

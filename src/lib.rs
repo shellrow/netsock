@@ -11,3 +11,9 @@ pub use sys::iter_sockets;
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use sys::iter_sockets_without_processes;
+
+#[cfg(target_os = "linux")]
+pub use sys::iter_sockets_with_cache;
+
+#[cfg(target_os = "linux")]
+pub use sys::ProcessCache;

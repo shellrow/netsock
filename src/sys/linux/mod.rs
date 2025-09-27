@@ -2,13 +2,34 @@ mod ext;
 mod netlink_iter;
 mod procfs;
 
+pub use procfs::ProcessCache;
 use crate::error::Error;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::linux::netlink_iter::*;
-use crate::sys::linux::procfs::*;
 use netlink_packet_sock_diag::{AF_INET, AF_INET6, IPPROTO_TCP, IPPROTO_UDP};
+
+struct ProcessAttached<I> {
+    inner: I,
+    cache: ProcessCache,
+}
+
+impl<I> Iterator for ProcessAttached<I>
+where
+    I: Iterator<Item = Result<SocketInfo, Error>>,
+{
+    type Item = Result<SocketInfo, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|result| {
+            result.map(|socket_info| SocketInfo {
+                processes: self.cache.clone_processes(socket_info.inode),
+                ..socket_info
+            })
+        })
+    }
+}
 
 /// Iterates over socket information based on the specified address family and protocol flags.
 ///
@@ -33,6 +54,10 @@ use netlink_packet_sock_diag::{AF_INET, AF_INET6, IPPROTO_TCP, IPPROTO_UDP};
 ///
 /// # Examples
 /// ```
+/// use netsock::family::AddressFamilyFlags;
+/// use netsock::iter_sockets;
+/// use netsock::protocol::ProtocolFlags;
+///
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///
@@ -49,10 +74,18 @@ pub fn iter_sockets(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
-    Ok(set_processes(iter_sockets_without_processes(
-        af_flags,
-        proto_flags,
-    )?))
+    let sockets = iter_sockets_without_processes(af_flags, proto_flags)?;
+    let cache = ProcessCache::snapshot()?;
+    Ok(attach_processes(sockets, cache))
+}
+
+pub fn iter_sockets_with_cache(
+    af_flags: AddressFamilyFlags,
+    proto_flags: ProtocolFlags,
+    cache: ProcessCache,
+) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
+    let sockets = iter_sockets_without_processes(af_flags, proto_flags)?;
+    Ok(attach_processes(sockets, cache))
 }
 
 /// Iterates over socket information based on the specified address family and protocol flags.
@@ -86,16 +119,12 @@ pub fn iter_sockets_without_processes(
     Ok(iterators.into_iter().flatten())
 }
 
-fn set_processes(
-    sockets_info: impl Iterator<Item = Result<SocketInfo, Error>>,
-) -> impl Iterator<Item = Result<SocketInfo, Error>> {
-    let mut inode_proc_map = build_inode_proc_map();
-    sockets_info.map(move |r| {
-        r.map(|socket_info| SocketInfo {
-            processes: inode_proc_map
-                .remove(&socket_info.inode)
-                .unwrap_or(Vec::new()),
-            ..socket_info
-        })
-    })
+fn attach_processes<I>(sockets_info: I, cache: ProcessCache) -> ProcessAttached<I>
+where
+    I: Iterator<Item = Result<SocketInfo, Error>>,
+{
+    ProcessAttached {
+        inner: sockets_info,
+        cache,
+    }
 }

@@ -29,6 +29,10 @@ use crate::sys::*;
 ///
 /// # Examples
 /// ```
+/// use netsock::family::AddressFamilyFlags;
+/// use netsock::get_sockets;
+/// use netsock::protocol::ProtocolFlags;
+///
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///
