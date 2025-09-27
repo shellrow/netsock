@@ -1,9 +1,9 @@
 use super::proc::get_process_name;
 use crate::error::*;
 use crate::process::Process;
+use crate::socket::SocketInfo;
 use crate::socket::{ProtocolSocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
-use crate::socket::SocketInfo;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, FALSE, NO_ERROR};
 use windows_sys::Win32::NetworkManagement::IpHelper::{

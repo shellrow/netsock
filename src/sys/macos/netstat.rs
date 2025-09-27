@@ -1,5 +1,5 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::io;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use libproc::file_info::{pidfdinfo, ListFDs, ProcFDInfo, ProcFDType};
 use libproc::net_info::SocketFDInfo;
@@ -172,8 +172,9 @@ pub fn list_pids(proc_filter: ProcFilter) -> Result<Vec<PID>, Error> {
 }
 
 pub fn list_all_fds_for_pid(pid: PID) -> Result<Vec<ProcFDInfo>, Error> {
-    let pid_info = pidinfo::<TaskAllInfo>(pid as i32, 0)
-        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e)))?;
+    let pid_info = pidinfo::<TaskAllInfo>(pid as i32, 0).map_err(|e| {
+        Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e))
+    })?;
     let fds = listpidinfo::<ListFDs>(pid as i32, pid_info.pbsd.pbi_nfiles as usize)
         .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e)))?
         .into_iter()
@@ -182,12 +183,16 @@ pub fn list_all_fds_for_pid(pid: PID) -> Result<Vec<ProcFDInfo>, Error> {
 }
 
 pub fn get_fd_information(pid: PID, fd: ProcFDInfo) -> Result<SocketFDInfo, Error> {
-    let socket = pidfdinfo::<SocketFDInfo>(pid as i32, fd.proc_fd)
-        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e)))?;
+    let socket = pidfdinfo::<SocketFDInfo>(pid as i32, fd.proc_fd).map_err(|e| {
+        Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e))
+    })?;
     Ok(socket)
 }
 
-fn get_local_addr(family: SocketFamily, in_sock_info: libproc::net_info::InSockInfo) -> Result<IpAddr, Error> {
+fn get_local_addr(
+    family: SocketFamily,
+    in_sock_info: libproc::net_info::InSockInfo,
+) -> Result<IpAddr, Error> {
     // Unsafe because of union access, but we check the type of address before accessing.
     match family {
         SocketFamily::AF_INET => {
@@ -202,7 +207,10 @@ fn get_local_addr(family: SocketFamily, in_sock_info: libproc::net_info::InSockI
     }
 }
 
-fn get_remote_addr(family: SocketFamily, in_sock_info: libproc::net_info::InSockInfo) -> Result<IpAddr, Error> {
+fn get_remote_addr(
+    family: SocketFamily,
+    in_sock_info: libproc::net_info::InSockInfo,
+) -> Result<IpAddr, Error> {
     // Unsafe because of union access, but we check the type of address before accessing.
     match family {
         SocketFamily::AF_INET => {
@@ -226,9 +234,8 @@ fn parse_tcp_socket_info(sinfo: SocketFDInfo) -> Option<TcpSocketInfo> {
     let socket_kind = SockInfo::from_i32(sock_info.soi_kind)?;
 
     // Access to union field in unsafe, but we already checked that this is a TCP connection.
-    if socket_kind != SockInfo::Tcp 
-    { 
-        return None; 
+    if socket_kind != SockInfo::Tcp {
+        return None;
     }
     let tcp_in = unsafe { sock_info.soi_proto.pri_tcp };
 
@@ -323,7 +330,7 @@ pub fn iterate_netstat_info(
                     /* let sock_info_kind: SocketInfoKind = sock_fd_info.psi.soi_kind.into();
                     match sock_info_kind {
                         SocketInfoKind::In | SocketInfoKind::Tcp  => {
-                            // TODO: Handle more socket kinds if needed       
+                            // TODO: Handle more socket kinds if needed
                         },
                         _ => {},
                     } */
@@ -354,7 +361,7 @@ pub fn iterate_netstat_info(
                         }
                     }
                 }
-                _ => {},
+                _ => {}
             }
         }
     }

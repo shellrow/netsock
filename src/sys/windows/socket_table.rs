@@ -1,8 +1,8 @@
 use crate::error::*;
+use crate::socket::SocketInfo;
 use crate::socket::{ProtocolSocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
 use crate::sys::windows::socket_table_extended::SocketTable;
-use crate::socket::SocketInfo;
 use std::net::{IpAddr, Ipv4Addr};
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, FALSE, NO_ERROR};
 use windows_sys::Win32::NetworkManagement::IpHelper::{
@@ -42,7 +42,7 @@ impl SocketTable for MIB_UDPTABLE {
     }
     fn get_rows_count(table: &[u8]) -> usize {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE) };
-         table.dwNumEntries as usize
+        table.dwNumEntries as usize
     }
     fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE) };
