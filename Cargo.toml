@@ -11,15 +11,15 @@ keywords = ["network", "socket"]
 categories = ["network-programming", "os"]
 
 [dependencies]
-bitflags = "2.6"
+bitflags = "2.9"
 thiserror = "2.0"
 log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 netlink-sys = "0.8"
-netlink-packet-core = "0.7"
-netlink-packet-utils = "0.5"
+netlink-packet-core = "0.8"
+netlink-packet-utils = "0.6"
 netlink-packet-sock-diag = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
