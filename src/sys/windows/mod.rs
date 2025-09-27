@@ -1,5 +1,4 @@
 mod ext;
-mod ffi;
 mod proc;
 mod socket_table;
 mod socket_table_extended;
@@ -9,8 +8,11 @@ use crate::error::*;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
-use crate::sys::windows::ffi::*;
 use crate::sys::windows::socket_table_iterator::SocketTableIterator;
+use windows_sys::Win32::NetworkManagement::IpHelper::{
+    MIB_TCP6TABLE_OWNER_PID, MIB_TCPTABLE, MIB_TCPTABLE_OWNER_PID, MIB_UDP6TABLE_OWNER_PID,
+    MIB_UDPTABLE, MIB_UDPTABLE_OWNER_PID,
+};
 
 /// Iterates over socket information based on the specified address family and protocol flags.
 ///
@@ -135,8 +137,11 @@ pub fn iter_sockets_without_processes(
 
 #[cfg(test)]
 mod tests {
-    use crate::sys::windows::ffi::*;
     use crate::sys::windows::socket_table_iterator::SocketTableIterator;
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        MIB_TCP6TABLE_OWNER_PID, MIB_TCPTABLE, MIB_TCPTABLE_OWNER_PID, MIB_UDP6TABLE_OWNER_PID,
+        MIB_UDPTABLE, MIB_UDPTABLE_OWNER_PID,
+    };
 
     #[test]
     fn test_iterate_over_all_supported_tables() {

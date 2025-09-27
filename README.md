@@ -22,7 +22,7 @@ Cross-platform library for network sockets information.
 Add `netsock` to your dependencies  
 ```toml:Cargo.toml
 [dependencies]
-netsock = "0.4"
+netsock = "0.5"
 ```
 
 For more details, see [examples][examples-url] or [doc][doc-url].  

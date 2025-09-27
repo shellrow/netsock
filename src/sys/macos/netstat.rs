@@ -1,14 +1,11 @@
-#![allow(unused)]
-#![allow(non_camel_case_types)]
-
-use std::fmt::{self, Display};
-use std::mem::MaybeUninit;
+use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::os::raw::{c_int, c_uint, c_void};
-use std::ptr;
-use std::{io, mem};
 
-use byteorder::{ByteOrder, NetworkEndian};
+use libproc::file_info::{ListFDs, ProcFDInfo, ProcFDType, pidfdinfo};
+use libproc::net_info::SocketFDInfo;
+use libproc::proc_pid::{listpidinfo, pidinfo};
+use libproc::processes::ProcFilter;
+use libproc::task_info::TaskAllInfo;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -18,58 +15,21 @@ use crate::process::Process;
 use crate::protocol::ProtocolFlags;
 use crate::socket::{ProtocolSocketInfo, SocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
-use crate::sys::macos::ffi::libproc::*;
 
 use super::proc::get_process_name;
 
-pub type PID = c_int;
+type PID = u32;
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ProcFDInfo {
-    pub proc_fd: i32,
-    pub proc_fdtype: ProcFDType,
-}
-
-impl Default for ProcFDInfo {
-    fn default() -> Self {
-        ProcFDInfo {
-            proc_fd: 0,
-            // Atalk == 0
-            proc_fdtype: ProcFDType::Atalk,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
-pub enum ProcType {
-    ProcAllPIDS = 1,
-    ProcPGRPOnly = 2,
-    ProcTTYOnly = 3,
-    ProcUIDOnly = 4,
-    ProcRUIDOnly = 5,
-    ProcPPIDOnly = 6,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
-pub enum ProcFDType {
-    Atalk = 0,
-    Vnode = 1,
-    Socket = 2,
-    PSHM = 3,
-    PSEM = 4,
-    Kqueue = 5,
-    Pipe = 6,
-    FsEvents = 7,
-    NetPolicy = 9,
-}
+const AF_INET: u32 = 2;
+const AF_INET6: u32 = 30;
+const IPPROTO_TCP: u32 = 6;
+const IPPROTO_UDP: u32 = 17;
 
 // Adapter from proc_info.h
+#[allow(non_camel_case_types)]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
-pub enum SockInfo {
+enum SockInfo {
     Generic = 0,
     In = 1,
     Tcp = 2,
@@ -79,9 +39,10 @@ pub enum SockInfo {
     Kern_ctl = 6,
 }
 
+#[allow(non_camel_case_types)]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
-pub enum SocketFamily {
+enum SocketFamily {
     AF_UNSPEC = 0,
     /* unspecified */
     AF_UNIX = 1,
@@ -160,28 +121,10 @@ pub enum SocketFamily {
     AF_MAX = 40,
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub enum PidInfoFlavor {
-    // list of struct proc_fdinfo
-    ListFDs = PROC_PIDLISTFDS as isize,
-    // struct proc_taskallinfo
-    TaskAllInfo = PROC_PIDTASKALLINFO as isize,
-    TBSDInfo = 3,
-    TaskInfo = 4,
-    ThreadInfo = 5,
-    ListThreads = 6,
-    RegionInfo = 7,
-    RegionPathInfo = 8,
-    VNodePathInfo = 9,
-    ThreadPathInfo = 10,
-    PathInfo = 11,
-    WorkQueueInfo = 12,
-}
-
+#[allow(non_camel_case_types)]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
-pub enum TCPSocketState {
+enum TCPSocketState {
     CLOSED = 0,
     /* closed */
     LISTEN = 1,
@@ -224,170 +167,65 @@ impl From<TCPSocketState> for TcpState {
     }
 }
 
-impl ProcFDInfo {
-    fn try_from_proc_fdinfo(other: proc_fdinfo) -> Result<Self, Error> {
-        Ok(ProcFDInfo {
-            proc_fd: other.proc_fd,
-            proc_fdtype: ProcFDType::from_i32(other.proc_fdtype as i32)
-                .ok_or_else(|| Error::NotAValidFDType(other.proc_fdtype))?,
-        })
-    }
-}
-
-// TODO: This can be extended to hold different kinds of FDInformation (tasks, thread, etc..)
-pub enum FDInformation {
-    SocketInfo(socket_fdinfo),
-
-    #[doc(hidden)]
-    __Nonexhaustive,
-}
-
-pub fn list_pids(proc_types: ProcType) -> Result<Vec<PID>, Error> {
-    let number_of_pids;
-
-    unsafe {
-        number_of_pids = proc_listpids(proc_types as c_uint, 0, ptr::null_mut(), 0);
-    }
-
-    if number_of_pids < 0 {
-        return Err(Error::FailedToListProcesses(io::Error::from_raw_os_error(
-            number_of_pids,
-        )));
-    }
-
-    let mut pids: Vec<PID> = Vec::new();
-    pids.resize_with(number_of_pids as usize, Default::default);
-
-    let return_code = unsafe {
-        proc_listpids(
-            proc_types as c_uint,
-            0,
-            pids.as_mut_ptr() as *mut c_void,
-            (pids.len() * mem::size_of::<PID>()) as i32,
-        )
-    };
-
-    if return_code <= 0 {
-        return Err(Error::FailedToListProcesses(io::Error::from_raw_os_error(
-            return_code,
-        )));
-    }
-
-    // Sometimes the OS returns excessive zero elements, so we truncate them.
-    Ok(pids.into_iter().filter(|f| *f > 0).collect())
+pub fn list_pids(proc_filter: ProcFilter) -> Result<Vec<PID>, Error> {
+    libproc::processes::pids_by_type(proc_filter).map_err(|e| Error::FailedToListProcesses(e))
 }
 
 pub fn list_all_fds_for_pid(pid: PID) -> Result<Vec<ProcFDInfo>, Error> {
-    // We need to call proc_pidinfo twice, one time to get needed buffer size.
-    // A second time to actually populate buffer.
-    let buffer_size = unsafe {
-        proc_pidinfo(
-            pid as c_int,
-            PROC_PIDLISTFDS as c_int,
-            0,
-            ptr::null_mut(),
-            0,
-        )
-    };
-
-    if buffer_size <= 0 {
-        return Err(Error::FailedToListProcesses(io::Error::from_raw_os_error(
-            buffer_size,
-        )));
-    }
-
-    let number_of_fds = buffer_size as usize / mem::size_of::<proc_fdinfo>();
-
-    let mut fds: Vec<proc_fdinfo> = Vec::new();
-    fds.resize_with(number_of_fds as usize, || proc_fdinfo {
-        proc_fd: 0,
-        proc_fdtype: 0,
-    });
-
-    let return_code = unsafe {
-        proc_pidinfo(
-            pid as c_int,
-            PROC_PIDLISTFDS as c_int,
-            0,
-            fds.as_mut_ptr() as *mut c_void,
-            buffer_size,
-        )
-    };
-
-    if return_code <= 0 {
-        Err(Error::FailedToListProcesses(io::Error::from_raw_os_error(
-            return_code,
-        )))
-    } else {
-        Ok(fds
-            .into_iter()
-            .map(|fd| ProcFDInfo::try_from_proc_fdinfo(fd).unwrap_or_default())
-            .collect())
-    }
+    let pid_info = pidinfo::<TaskAllInfo>(pid as i32, 0).map_err(|e| {
+        Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e))
+    })?;
+    let fds = listpidinfo::<ListFDs>(pid as i32, pid_info.pbsd.pbi_nfiles as usize)
+        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e)))?
+        .into_iter()
+        .collect();
+    Ok(fds)
 }
 
-pub fn get_fd_information(pid: PID, fd: ProcFDInfo) -> Result<FDInformation, Error> {
-    match fd.proc_fdtype {
-        ProcFDType::Socket => {
-            let mut sinfo: MaybeUninit<socket_fdinfo> = MaybeUninit::uninit();
-
-            let return_code = unsafe {
-                proc_pidfdinfo(
-                    pid,
-                    fd.proc_fd,
-                    PROC_PIDFDSOCKETINFO as i32,
-                    sinfo.as_mut_ptr() as *mut c_void,
-                    mem::size_of::<socket_fdinfo>() as i32,
-                )
-            };
-
-            if return_code < 0 {
-                Err(Error::FailedToQueryFileDescriptors(
-                    io::Error::from_raw_os_error(return_code),
-                ))
-            } else {
-                Ok(FDInformation::SocketInfo(unsafe { sinfo.assume_init() }))
-            }
-        }
-        _ => Err(Error::UnsupportedFileDescriptor),
-    }
+pub fn get_fd_information(pid: PID, fd: ProcFDInfo) -> Result<SocketFDInfo, Error> {
+    let socket = pidfdinfo::<SocketFDInfo>(pid as i32, fd.proc_fd).map_err(|e| {
+        Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e))
+    })?;
+    Ok(socket)
 }
 
-fn get_local_addr(family: SocketFamily, saddr: in_sockinfo) -> Result<IpAddr, Error> {
+fn get_local_addr(
+    family: SocketFamily,
+    in_sock_info: libproc::net_info::InSockInfo,
+) -> Result<IpAddr, Error> {
     // Unsafe because of union access, but we check the type of address before accessing.
     match family {
         SocketFamily::AF_INET => {
-            let addr = unsafe { saddr.insi_laddr.ina_46.i46a_addr4.s_addr };
+            let addr = unsafe { in_sock_info.insi_laddr.ina_46.i46a_addr4.s_addr };
             Ok(IpAddr::V4(Ipv4Addr::from(u32::from_be(addr))))
         }
         SocketFamily::AF_INET6 => {
-            let addr = unsafe { &saddr.insi_laddr.ina_6.__u6_addr.__u6_addr8 };
-            let mut ipv6_addr = [0_u16; 8];
-            NetworkEndian::read_u16_into(addr, &mut ipv6_addr);
-            Ok(IpAddr::V6(Ipv6Addr::from(ipv6_addr)))
+            let octets = unsafe { in_sock_info.insi_laddr.ina_6.s6_addr };
+            Ok(IpAddr::V6(Ipv6Addr::from(octets)))
         }
         _ => Err(Error::UnsupportedSocketFamily(family as u32)),
     }
 }
 
-fn get_remote_addr(family: SocketFamily, saddr: in_sockinfo) -> Result<IpAddr, Error> {
+fn get_remote_addr(
+    family: SocketFamily,
+    in_sock_info: libproc::net_info::InSockInfo,
+) -> Result<IpAddr, Error> {
     // Unsafe because of union access, but we check the type of address before accessing.
     match family {
         SocketFamily::AF_INET => {
-            let addr = unsafe { saddr.insi_faddr.ina_46.i46a_addr4.s_addr };
+            let addr = unsafe { in_sock_info.insi_faddr.ina_46.i46a_addr4.s_addr };
             Ok(IpAddr::V4(Ipv4Addr::from(u32::from_be(addr))))
         }
         SocketFamily::AF_INET6 => {
-            let addr = unsafe { &saddr.insi_faddr.ina_6.__u6_addr.__u6_addr8 };
-            let mut ipv6_addr = [0_u16; 8];
-            NetworkEndian::read_u16_into(addr, &mut ipv6_addr);
-            Ok(IpAddr::V6(Ipv6Addr::from(ipv6_addr)))
+            let octets = unsafe { in_sock_info.insi_faddr.ina_6.s6_addr };
+            Ok(IpAddr::V6(Ipv6Addr::from(octets)))
         }
         _ => Err(Error::UnsupportedSocketFamily(family as u32)),
     }
 }
 
-fn parse_tcp_socket_info(pid: PID, fd: ProcFDInfo, sinfo: socket_fdinfo) -> Option<TcpSocketInfo> {
+fn parse_tcp_socket_info(sinfo: SocketFDInfo) -> Option<TcpSocketInfo> {
     let sock_info = sinfo.psi;
     let family = match SocketFamily::from_i32(sock_info.soi_family) {
         Some(family) => family,
@@ -396,7 +234,9 @@ fn parse_tcp_socket_info(pid: PID, fd: ProcFDInfo, sinfo: socket_fdinfo) -> Opti
     let socket_kind = SockInfo::from_i32(sock_info.soi_kind)?;
 
     // Access to union field in unsafe, but we already checked that this is a TCP connection.
-    assert!(socket_kind == SockInfo::Tcp);
+    if socket_kind != SockInfo::Tcp {
+        return None;
+    }
     let tcp_in = unsafe { sock_info.soi_proto.pri_tcp };
 
     let tcp_sockaddr_in = tcp_in.tcpsi_ini;
@@ -405,21 +245,21 @@ fn parse_tcp_socket_info(pid: PID, fd: ProcFDInfo, sinfo: socket_fdinfo) -> Opti
     let remote_address = get_remote_addr(family, tcp_sockaddr_in).ok()?;
     let local_address = get_local_addr(family, tcp_sockaddr_in).ok()?;
 
-    let lport_bytes: [u8; 4] = i32::to_le_bytes(tcp_sockaddr_in.insi_lport);
-    let fport_bytes: [u8; 4] = i32::to_le_bytes(tcp_sockaddr_in.insi_fport);
+    let lport = u16::from_be(tcp_sockaddr_in.insi_lport as u16);
+    let fport = u16::from_be(tcp_sockaddr_in.insi_fport as u16);
 
     let socket_info = TcpSocketInfo {
         local_addr: local_address,
-        local_port: NetworkEndian::read_u16(&lport_bytes),
+        local_port: lport,
         remote_addr: remote_address,
-        remote_port: NetworkEndian::read_u16(&fport_bytes),
+        remote_port: fport,
         state: connection_state.into(),
     };
 
     Some(socket_info)
 }
 
-fn parse_udp_socket_info(pid: PID, fd: ProcFDInfo, sinfo: socket_fdinfo) -> Option<UdpSocketInfo> {
+fn parse_udp_socket_info(sinfo: SocketFDInfo) -> Option<UdpSocketInfo> {
     let sock_info = sinfo.psi;
     let family = match SocketFamily::from_i32(sock_info.soi_family) {
         Some(family) => family,
@@ -428,16 +268,18 @@ fn parse_udp_socket_info(pid: PID, fd: ProcFDInfo, sinfo: socket_fdinfo) -> Opti
     let socket_kind = SockInfo::from_i32(sock_info.soi_kind)?;
 
     // Access to union field in unsafe, but we already checked that this is a In connection.
-    assert!(socket_kind == SockInfo::In);
+    if socket_kind != SockInfo::In {
+        return None;
+    }
     let in_socket_info = unsafe { sock_info.soi_proto.pri_in };
 
     let local_address = get_local_addr(family, in_socket_info).ok()?;
 
-    let lport_bytes: [u8; 4] = i32::to_le_bytes(in_socket_info.insi_lport);
+    let lport = u16::from_be(in_socket_info.insi_lport as u16);
 
     let sock_info = UdpSocketInfo {
         local_addr: local_address,
-        local_port: NetworkEndian::read_u16(&lport_bytes),
+        local_port: lport,
     };
 
     Some(sock_info)
@@ -452,7 +294,7 @@ pub fn iterate_netstat_info(
     let tcp = proto_flags.contains(ProtocolFlags::TCP);
     let udp = proto_flags.contains(ProtocolFlags::UDP);
 
-    let pids = list_pids(ProcType::ProcAllPIDS)?;
+    let pids = list_pids(ProcFilter::All)?;
 
     let mut results = vec![];
 
@@ -462,56 +304,64 @@ pub fn iterate_netstat_info(
         // since some of them may fail randomly (unexpectedly closed etc..)
         let fds = match list_all_fds_for_pid(pid) {
             Ok(fds) => fds,
-            Err(e) => {
+            Err(_e) => {
+                //results.push(Err(e));
                 continue;
             }
         };
 
-        let pname = match get_process_name(pid) {
+        let pname = match get_process_name(pid as i32) {
             Ok(pname) => pname,
             Err(_) => String::from("Unknown"),
         };
 
         for fd in fds {
-            if fd.proc_fdtype == ProcFDType::Socket {
-                let fd_information = match get_fd_information(pid, fd) {
-                    Ok(fd_information) => fd_information,
-                    Err(e) => {
-                        results.push(Err(e));
-                        continue;
-                    }
-                };
+            let proc_fdtype: ProcFDType = fd.proc_fdtype.into();
+            match proc_fdtype {
+                ProcFDType::Socket => {
+                    let sock_fd_info = match get_fd_information(pid, fd) {
+                        Ok(fd_info) => fd_info,
+                        Err(e) => {
+                            results.push(Err(e));
+                            continue;
+                        }
+                    };
 
-                match fd_information {
-                    FDInformation::SocketInfo(sinfo) => {
-                        if ipv4 && sinfo.psi.soi_family == AF_INET as i32
-                            || ipv6 && sinfo.psi.soi_family == AF_INET6 as i32
-                        {
-                            if tcp && sinfo.psi.soi_protocol == IPPROTO_TCP as i32 {
-                                if let Some(row) = parse_tcp_socket_info(pid, fd, sinfo) {
-                                    results.push(Ok(SocketInfo {
-                                        protocol_socket_info: ProtocolSocketInfo::Tcp(row),
-                                        processes: vec![Process {
-                                            pid: pid as u32,
-                                            name: pname.clone(),
-                                        }],
-                                    }));
-                                }
-                            } else if udp && sinfo.psi.soi_protocol == IPPROTO_UDP as i32 {
-                                if let Some(row) = parse_udp_socket_info(pid, fd, sinfo) {
-                                    results.push(Ok(SocketInfo {
-                                        protocol_socket_info: ProtocolSocketInfo::Udp(row),
-                                        processes: vec![Process {
-                                            pid: pid as u32,
-                                            name: pname.clone(),
-                                        }],
-                                    }));
-                                }
+                    /* let sock_info_kind: SocketInfoKind = sock_fd_info.psi.soi_kind.into();
+                    match sock_info_kind {
+                        SocketInfoKind::In | SocketInfoKind::Tcp  => {
+                            // TODO: Handle more socket kinds if needed
+                        },
+                        _ => {},
+                    } */
+
+                    if (ipv4 && sock_fd_info.psi.soi_family == AF_INET as i32)
+                        || (ipv6 && sock_fd_info.psi.soi_family == AF_INET6 as i32)
+                    {
+                        if tcp && sock_fd_info.psi.soi_protocol == IPPROTO_TCP as i32 {
+                            if let Some(row) = parse_tcp_socket_info(sock_fd_info) {
+                                results.push(Ok(SocketInfo {
+                                    protocol_socket_info: ProtocolSocketInfo::Tcp(row),
+                                    processes: vec![Process {
+                                        pid: pid as u32,
+                                        name: pname.clone(),
+                                    }],
+                                }));
+                            }
+                        } else if udp && sock_fd_info.psi.soi_protocol == IPPROTO_UDP as i32 {
+                            if let Some(row) = parse_udp_socket_info(sock_fd_info) {
+                                results.push(Ok(SocketInfo {
+                                    protocol_socket_info: ProtocolSocketInfo::Udp(row),
+                                    processes: vec![Process {
+                                        pid: pid as u32,
+                                        name: pname.clone(),
+                                    }],
+                                }));
                             }
                         }
                     }
-                    _ => {}
                 }
+                _ => {}
             }
         }
     }
@@ -525,16 +375,14 @@ mod tests {
 
     #[test]
     fn test_list_pids() {
-        println!("{:#?}", list_pids(ProcType::ProcAllPIDS).unwrap());
-        assert!(list_pids(ProcType::ProcAllPIDS).unwrap().len() > 5);
+        assert!(list_pids(ProcFilter::All).unwrap().len() > 5);
     }
 
     #[test]
     fn test_list_fds_for_pid() {
-        let pids = list_pids(ProcType::ProcAllPIDS).unwrap();
+        let pids = list_pids(ProcFilter::All).unwrap();
         for pid in pids.iter().take(100) {
             if let Ok(fds) = list_all_fds_for_pid(*pid) {
-                println!("{} {:#?}", pid, fds);
                 assert!(!fds.is_empty());
             }
         }
@@ -545,7 +393,6 @@ mod tests {
         let ns: Vec<_> = iterate_netstat_info(AddressFamilyFlags::all(), ProtocolFlags::all())
             .unwrap()
             .collect();
-        println!("{:#?}", ns);
         assert!(!ns.is_empty());
     }
 }

@@ -1,5 +1,4 @@
 mod ext;
-mod ffi;
 mod netstat;
 mod proc;
 
