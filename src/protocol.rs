@@ -19,20 +19,14 @@ bitflags! {
     ///
     /// # Examples
     /// ```
-    /// use your_crate::ProtocolFlags;
+    /// use netsock::protocol::ProtocolFlags;
     ///
     /// // Specify that an operation supports both TCP and UDP protocols.
     /// let flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
     ///
     /// // Check if TCP is supported.
-    /// if flags.contains(ProtocolFlags::TCP) {
-    ///     println!("Supports TCP");
-    /// }
-    ///
-    /// // Check if UDP is supported.
-    /// if flags.contains(ProtocolFlags::UDP) {
-    ///     println!("Supports UDP");
-    /// }
+    /// assert!(flags.contains(ProtocolFlags::TCP));
+    /// assert!(flags.contains(ProtocolFlags::UDP));
     /// ```
     pub struct ProtocolFlags: u8 {
         const TCP = 0b00000001;
