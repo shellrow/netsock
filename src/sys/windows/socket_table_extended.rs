@@ -147,7 +147,7 @@ fn get_extended_tcp_table(address_family: u32) -> Result<Vec<u8>, Error> {
     let mut table = Vec::<u8>::new();
     let mut iterations = 0;
     while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = Vec::<u8>::with_capacity(table_size as usize);
+        table = vec![0u8; table_size as usize];
         err_code = unsafe {
             GetExtendedTcpTable(
                 table.as_mut_ptr() as *mut _,
@@ -164,7 +164,6 @@ fn get_extended_tcp_table(address_family: u32) -> Result<Vec<u8>, Error> {
         }
     }
     if err_code == NO_ERROR {
-        unsafe { table.set_len(table_size as usize) };
         Ok(table)
     } else {
         Err(Error::FailedToGetTcpTable(err_code as i32))
@@ -186,7 +185,7 @@ fn get_extended_udp_table(address_family: u32) -> Result<Vec<u8>, Error> {
     let mut table = Vec::<u8>::new();
     let mut iterations = 0;
     while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = Vec::<u8>::with_capacity(table_size as usize);
+        table = vec![0u8; table_size as usize];
         err_code = unsafe {
             GetExtendedUdpTable(
                 table.as_mut_ptr() as *mut _,
@@ -203,7 +202,6 @@ fn get_extended_udp_table(address_family: u32) -> Result<Vec<u8>, Error> {
         }
     }
     if err_code == NO_ERROR {
-        unsafe { table.set_len(table_size as usize) };
         Ok(table)
     } else {
         Err(Error::FailedToGetUdpTable(err_code as i32))
