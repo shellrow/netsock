@@ -8,29 +8,14 @@ use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::macos::netstat::*;
 
-/// Iterates over socket information based on the specified address family and protocol flags.
-///
-/// This function provides an iterator over `SocketInfo` structures, allowing the caller to
-/// iterate through sockets filtered by address family and protocol criteria. It's a higher-level
-/// abstraction over the system's netstat information.
-///
-/// # Parameters
-/// - `af_flags`: An `AddressFamilyFlags` enum specifying the address families to filter by.
-///   This can include flags like `AF_INET` for IPv4 or `AF_INET6` for IPv6.
-/// - `proto_flags`: A `ProtocolFlags` enum specifying the protocols to filter by.
-///   This can include flags like `TCP` or `UDP`.
-///
-/// # Returns
-/// A `Result` containing an iterator over `Result<SocketInfo, Error>`. Each item in the iterator
-/// is a `Result` that either contains a `SocketInfo` struct with details about a socket, or an
-/// `Error` indicating a problem encountered while fetching the socket information.
-///
-/// # Errors
-/// Returns an `Error` if there is a failure in fetching the netstat information, including
-/// failures related to invalid parameters, system call failures, or other OS-level issues.
+/// Returns an iterator over sockets that match the provided filters.
 ///
 /// # Examples
 /// ```
+/// use netsock::family::AddressFamilyFlags;
+/// use netsock::iter_sockets;
+/// use netsock::protocol::ProtocolFlags;
+///
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///

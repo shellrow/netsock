@@ -31,26 +31,10 @@ where
     }
 }
 
-/// Iterates over socket information based on the specified address family and protocol flags.
+/// Returns sockets with process ownership attached.
 ///
-/// This function provides an iterator over `SocketInfo` structures, allowing the caller to
-/// iterate through sockets filtered by address family and protocol criteria. It's a higher-level
-/// abstraction over the system's netstat information.
-///
-/// # Parameters
-/// - `af_flags`: An `AddressFamilyFlags` enum specifying the address families to filter by.
-///   This can include flags like `AF_INET` for IPv4 or `AF_INET6` for IPv6.
-/// - `proto_flags`: A `ProtocolFlags` enum specifying the protocols to filter by.
-///   This can include flags like `TCP` or `UDP`.
-///
-/// # Returns
-/// A `Result` containing an iterator over `Result<SocketInfo, Error>`. Each item in the iterator
-/// is a `Result` that either contains a `SocketInfo` struct with details about a socket, or an
-/// `Error` indicating a problem encountered while fetching the socket information.
-///
-/// # Errors
-/// Returns an `Error` if there is a failure in fetching the netstat information, including
-/// failures related to invalid parameters, system call failures, or other OS-level issues.
+/// This function combines raw socket enumeration with a [`ProcessCache`] snapshot
+/// so each returned socket includes associated processes.
 ///
 /// # Examples
 /// ```
@@ -79,6 +63,9 @@ pub fn iter_sockets(
     Ok(attach_processes(sockets, cache))
 }
 
+/// Returns sockets with process ownership attached using a prebuilt cache.
+///
+/// Reusing a cache can reduce overhead when calling this function repeatedly.
 pub fn iter_sockets_with_cache(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
@@ -88,9 +75,7 @@ pub fn iter_sockets_with_cache(
     Ok(attach_processes(sockets, cache))
 }
 
-/// Iterates over socket information based on the specified address family and protocol flags.
-///
-/// without process info.
+/// Returns sockets without process ownership data.
 pub fn iter_sockets_without_processes(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,

@@ -1,14 +1,12 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Represents a process in the system.
-///
-/// This struct provides basic information about a process, including its ID and name.
+/// Basic process metadata associated with a socket.
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Process {
-    /// Process ID.
+    /// Process identifier.
     pub pid: u32,
-    /// Process name.
+    /// Process name as reported by the operating system.
     pub name: String,
 }

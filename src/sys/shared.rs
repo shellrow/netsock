@@ -4,28 +4,20 @@ use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
 use crate::sys::*;
 
-/// Retrieves a list of socket information filtered by address family and protocol flags.
+/// Collects sockets into a `Vec` using the provided filters.
 ///
-/// This function collects socket information into a vector, allowing the caller to obtain a
-/// comprehensive list of sockets that match the specified address family and protocol criteria.
-/// It's a convenient wrapper around `iter_sockets` for when you need to work with all sockets
-/// at once, rather than iterating over them.
+/// This is a convenience wrapper around [`iter_sockets`](crate::iter_sockets) for callers
+/// that prefer an eagerly collected result.
 ///
 /// # Parameters
-/// - `af_flags`: An `AddressFamilyFlags` enum value that specifies the address families to filter
-///   the sockets by. For instance, `AF_INET` for IPv4 or `AF_INET6` for IPv6.
-/// - `proto_flags`: A `ProtocolFlags` enum value that specifies the protocols to filter the
-///   sockets by, such as `TCP` or `UDP`.
+/// - `af_flags`: Address family filters (for example, IPv4 and/or IPv6).
+/// - `proto_flags`: Protocol filters (TCP and/or UDP).
 ///
 /// # Returns
-/// A `Result` containing a `Vec<SocketInfo>`, where each `SocketInfo` structure provides detailed
-/// information about a socket. If an error occurs during the collection of socket information,
-/// the function returns an `Error`.
+/// A `Result<Vec<SocketInfo>, Error>`.
 ///
 /// # Errors
-/// Returns an `Error` if any issues occur while gathering the socket information. This could be due
-/// to issues with the system calls, invalid parameters, or other problems encountered during
-/// the operation.
+/// Returns an error if socket enumeration fails.
 ///
 /// # Examples
 /// ```

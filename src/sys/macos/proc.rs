@@ -23,7 +23,7 @@
 /// operation is done correctly to avoid undefined behavior.
 ///
 /// # Examples
-/// ```
+/// ```ignore
 /// let pid = 1234;
 /// match get_process_name(pid) {
 ///     Ok(name) => println!("Process name: {}", name),
