@@ -23,7 +23,7 @@ Add `netsock` to your dependencies:
 
 ```toml:Cargo.toml
 [dependencies]
-netsock = "0.5"
+netsock = "0.6"
 ```
 
 See [examples][examples-url] and [docs][doc-url] for more details.
