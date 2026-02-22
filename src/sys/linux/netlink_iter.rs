@@ -54,7 +54,7 @@ impl NetlinkIterator {
         Ok(NetlinkIterator {
             protocol,
             socket,
-            recv_buf: [0u8; SOCKET_BUFFER_SIZE as usize],
+            recv_buf: [0u8; SOCKET_BUFFER_SIZE],
             offset: 0,
             size: 0,
             is_done: false,
