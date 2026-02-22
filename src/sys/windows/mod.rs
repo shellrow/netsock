@@ -14,29 +14,14 @@ use windows_sys::Win32::NetworkManagement::IpHelper::{
     MIB_UDPTABLE, MIB_UDPTABLE_OWNER_PID,
 };
 
-/// Iterates over socket information based on the specified address family and protocol flags.
-///
-/// This function provides an iterator over `SocketInfo` structures, allowing the caller to
-/// iterate through sockets filtered by address family and protocol criteria. It's a higher-level
-/// abstraction over the system's netstat information.
-///
-/// # Parameters
-/// - `af_flags`: An `AddressFamilyFlags` enum specifying the address families to filter by.
-///   This can include flags like `AF_INET` for IPv4 or `AF_INET6` for IPv6.
-/// - `proto_flags`: A `ProtocolFlags` enum specifying the protocols to filter by.
-///   This can include flags like `TCP` or `UDP`.
-///
-/// # Returns
-/// A `Result` containing an iterator over `Result<SocketInfo, Error>`. Each item in the iterator
-/// is a `Result` that either contains a `SocketInfo` struct with details about a socket, or an
-/// `Error` indicating a problem encountered while fetching the socket information.
-///
-/// # Errors
-/// Returns an `Error` if there is a failure in fetching the netstat information, including
-/// failures related to invalid parameters, system call failures, or other OS-level issues.
+/// Returns an iterator over sockets that match the provided filters.
 ///
 /// # Examples
 /// ```
+/// use netsock::family::AddressFamilyFlags;
+/// use netsock::iter_sockets;
+/// use netsock::protocol::ProtocolFlags;
+///
 /// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 ///
@@ -78,14 +63,10 @@ pub fn iter_sockets(
     Ok(iterators.into_iter().flatten())
 }
 
-/// Iterates through socket information, focusing on older versions like XP and 2003.
+/// Returns sockets without process ownership data.
 ///
-/// This function provides an iterator over `SocketInfo` structures without associating them
-/// with process information, which is particularly useful on older Windows versions where
-/// such process information might not be readily available or relevant.
-///
-/// The function supports filtering by protocol, allowing the caller to specify whether to
-/// iterate over TCP, UDP, or both types of sockets.
+/// This function uses legacy Windows table APIs and is mainly useful for older
+/// environments where owner PID data may be unavailable.
 ///
 /// # Parameters
 /// - `proto_flags`: A `ProtocolFlags` enum specifying the protocols to filter by. This can
@@ -102,6 +83,9 @@ pub fn iter_sockets(
 ///
 /// # Examples
 /// ```
+/// use netsock::iter_sockets_without_processes;
+/// use netsock::protocol::ProtocolFlags;
+///
 /// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
 /// match iter_sockets_without_processes(proto_flags) {
 ///     Ok(sockets) => {
@@ -116,8 +100,7 @@ pub fn iter_sockets(
 /// }
 /// ```
 ///
-/// Note that this function is Windows-specific and is intended to work with older versions
-/// of the operating system.
+/// This function is available only on Linux and Windows targets.
 pub fn iter_sockets_without_processes(
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {

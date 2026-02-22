@@ -5,28 +5,36 @@
 [doc-url]: https://docs.rs/netsock/latest/netsock
 
 # netsock [![Crates.io][crates-badge]][crates-url] ![License][license-badge]
-Cross-platform library for network socket and process information.
+Cross-platform library for inspecting network sockets and owning processes.
 
 ## Features
 - TCP and UDP socket inspection
 - IPv4 and IPv6 support
 - Optional process ownership information
 - Iterator and query-based filtering API
+- Optional `serde` support for serializing socket data
 
 ## Supported Platforms
 - Linux
 - macOS
 - Windows
 
-## Usage
+## Installation
 Add `netsock` to your dependencies:
 
-```toml:Cargo.toml
+```toml
 [dependencies]
-netsock = "0.5"
+netsock = "0.6"
 ```
 
-See [examples][examples-url] and [docs][doc-url] for more details.
+Enable serde support if needed:
+
+```toml
+[dependencies]
+netsock = { version = "0.6", features = ["serde"] }
+```
+
+See [examples][examples-url] and [API docs][doc-url] for more details.
 
 ## Basic Example
 ```rust
@@ -86,6 +94,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Inspired by
-- [netstat](https://crates.io/crates/netstat): unmaintained
+## Related Crates
+- [netstat](https://crates.io/crates/netstat) (unmaintained)
 - [netstat2](https://crates.io/crates/netstat2)

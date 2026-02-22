@@ -6,63 +6,60 @@ use std::net::IpAddr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Represents general information about a socket, encompassing both protocol-specific details
-/// and process associations.
+/// Socket metadata and optional owning process information.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SocketInfo {
-    /// Holds protocol-specific information, either TCP or UDP.
+    /// Protocol-specific fields.
     pub protocol_socket_info: ProtocolSocketInfo,
-    /// Lists processes associated with the socket, providing a connection between the socket
-    /// and the processes utilizing it.
+    /// Processes currently associated with the socket.
     pub processes: Vec<Process>,
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Represents the inode number of the socket on Linux or Android systems, offering a unique
-    /// identifier in the filesystem's context.
+    /// Socket inode on Linux/Android.
     pub inode: u32,
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Stores the owner's user ID (UID) for this socket, indicating who has the rights to manipulate it.
+    /// Owning user ID on Linux/Android.
     pub uid: u32,
 }
 
-/// Defines protocol-specific socket information, distinguishing between TCP and UDP protocols.
+/// Protocol-specific socket details.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ProtocolSocketInfo {
-    /// Contains TCP-specific information, encapsulating the state and local/remote endpoints.
+    /// TCP socket details, including state and endpoints.
     Tcp(TcpSocketInfo),
-    /// Contains UDP-specific information, focusing on the local endpoint as UDP is connectionless.
+    /// UDP socket details.
     Udp(UdpSocketInfo),
 }
 
-/// Provides detailed information specific to TCP sockets, including endpoint addresses and the connection state.
+/// TCP socket fields.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TcpSocketInfo {
-    /// The local IP address of the TCP socket.
+    /// Local IP address.
     pub local_addr: IpAddr,
-    /// The local port number of the TCP socket.
+    /// Local port.
     pub local_port: u16,
-    /// The remote IP address this socket is connected to.
+    /// Remote IP address.
     pub remote_addr: IpAddr,
-    /// The remote port number this socket is connected to.
+    /// Remote port.
     pub remote_port: u16,
-    /// The current state of the TCP connection.
+    /// Current TCP state.
     pub state: TcpState,
 }
 
-/// Provides information specific to UDP sockets, which primarily includes the local endpoint data.
+/// UDP socket fields.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UdpSocketInfo {
-    /// The local IP address of the UDP socket.
+    /// Local IP address.
     pub local_addr: IpAddr,
-    /// The local port number of the UDP socket.
+    /// Local port.
     pub local_port: u16,
 }
 
 impl SocketInfo {
-    /// Retrieves the local IP address associated with this socket, applicable to both TCP and UDP.
+    /// Returns the local IP address for either TCP or UDP sockets.
     pub fn local_addr(&self) -> IpAddr {
         match &self.protocol_socket_info {
             ProtocolSocketInfo::Tcp(s) => s.local_addr,
@@ -70,7 +67,7 @@ impl SocketInfo {
         }
     }
 
-    /// Retrieves the local port associated with this socket, applicable to both TCP and UDP.
+    /// Returns the local port for either TCP or UDP sockets.
     pub fn local_port(&self) -> u16 {
         match &self.protocol_socket_info {
             ProtocolSocketInfo::Tcp(s) => s.local_port,
@@ -78,7 +75,7 @@ impl SocketInfo {
         }
     }
 
-    /// Retrieves the remote IP address associated with the socket when applicable.
+    /// Returns the remote IP address for TCP sockets.
     pub fn remote_addr(&self) -> Option<IpAddr> {
         match &self.protocol_socket_info {
             ProtocolSocketInfo::Tcp(s) => Some(s.remote_addr),
@@ -86,7 +83,7 @@ impl SocketInfo {
         }
     }
 
-    /// Retrieves the remote port associated with the socket when applicable.
+    /// Returns the remote port for TCP sockets.
     pub fn remote_port(&self) -> Option<u16> {
         match &self.protocol_socket_info {
             ProtocolSocketInfo::Tcp(s) => Some(s.remote_port),
@@ -94,7 +91,7 @@ impl SocketInfo {
         }
     }
 
-    /// Returns true if any associated process matches the provided PID.
+    /// Returns `true` if any associated process has the given PID.
     pub fn is_owned_by_pid(&self, pid: u32) -> bool {
         self.processes.iter().any(|process| process.pid == pid)
     }
@@ -146,7 +143,7 @@ impl SocketQuery {
         self
     }
 
-    /// Returns true if the socket satisfies the query criteria.
+    /// Returns `true` when the socket satisfies all configured criteria.
     pub fn matches(&self, socket: &SocketInfo) -> bool {
         if let Some(addr) = self.local_addr
             && socket.local_addr() != addr
@@ -182,7 +179,7 @@ impl SocketQuery {
     }
 }
 
-/// Provides convenient filtering helpers for iterators that yield [`SocketInfo`] values.
+/// Extension helpers for iterators of `Result<SocketInfo, Error>`.
 pub trait SocketIteratorExt: Iterator<Item = Result<SocketInfo, Error>> + Sized {
     /// Filters sockets using the provided [`SocketQuery`].
     fn filter_by_query(self, query: SocketQuery) -> FilterByQuery<Self> {
@@ -192,7 +189,7 @@ pub trait SocketIteratorExt: Iterator<Item = Result<SocketInfo, Error>> + Sized 
 
 impl<I> SocketIteratorExt for I where I: Iterator<Item = Result<SocketInfo, Error>> + Sized {}
 
-/// Iterator returned by [`SocketIteratorExt::filter_by_query`].
+/// Iterator adapter returned by [`SocketIteratorExt::filter_by_query`].
 pub struct FilterByQuery<I> {
     inner: I,
     query: SocketQuery,
