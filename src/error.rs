@@ -37,7 +37,7 @@ pub enum Error {
     FailedToAllocateBuffer,
 
     /// Occurs when retrieving the TCP table fails.
-    #[error("Failed to get UDP table")]
+    #[error("Failed to get TCP table")]
     FailedToGetTcpTable(i32),
 
     /// Occurs when retrieving the UDP table fails.

@@ -18,7 +18,8 @@ use crate::state::TcpState;
 
 use super::proc::get_process_name;
 
-type PID = u32;
+#[allow(clippy::upper_case_acronyms)]
+type Pid = u32;
 
 const AF_INET: u32 = 2;
 const AF_INET6: u32 = 30;
@@ -39,7 +40,7 @@ enum SockInfo {
     Kern_ctl = 6,
 }
 
-#[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
 enum SocketFamily {
@@ -121,7 +122,7 @@ enum SocketFamily {
     AF_MAX = 40,
 }
 
-#[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, FromPrimitive)]
 enum TCPSocketState {
@@ -167,25 +168,23 @@ impl From<TCPSocketState> for TcpState {
     }
 }
 
-pub fn list_pids(proc_filter: ProcFilter) -> Result<Vec<PID>, Error> {
-    libproc::processes::pids_by_type(proc_filter).map_err(|e| Error::FailedToListProcesses(e))
+pub fn list_pids(proc_filter: ProcFilter) -> Result<Vec<Pid>, Error> {
+    libproc::processes::pids_by_type(proc_filter).map_err(Error::FailedToListProcesses)
 }
 
-pub fn list_all_fds_for_pid(pid: PID) -> Result<Vec<ProcFDInfo>, Error> {
-    let pid_info = pidinfo::<TaskAllInfo>(pid as i32, 0).map_err(|e| {
-        Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e))
-    })?;
+pub fn list_all_fds_for_pid(pid: Pid) -> Result<Vec<ProcFDInfo>, Error> {
+    let pid_info = pidinfo::<TaskAllInfo>(pid as i32, 0)
+        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::other(e)))?;
     let fds = listpidinfo::<ListFDs>(pid as i32, pid_info.pbsd.pbi_nfiles as usize)
-        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e)))?
+        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::other(e)))?
         .into_iter()
         .collect();
     Ok(fds)
 }
 
-pub fn get_fd_information(pid: PID, fd: ProcFDInfo) -> Result<SocketFDInfo, Error> {
-    let socket = pidfdinfo::<SocketFDInfo>(pid as i32, fd.proc_fd).map_err(|e| {
-        Error::FailedToQueryFileDescriptors(io::Error::new(io::ErrorKind::Other, e))
-    })?;
+pub fn get_fd_information(pid: Pid, fd: ProcFDInfo) -> Result<SocketFDInfo, Error> {
+    let socket = pidfdinfo::<SocketFDInfo>(pid as i32, fd.proc_fd)
+        .map_err(|e| Error::FailedToQueryFileDescriptors(io::Error::other(e)))?;
     Ok(socket)
 }
 
@@ -227,10 +226,7 @@ fn get_remote_addr(
 
 fn parse_tcp_socket_info(sinfo: SocketFDInfo) -> Option<TcpSocketInfo> {
     let sock_info = sinfo.psi;
-    let family = match SocketFamily::from_i32(sock_info.soi_family) {
-        Some(family) => family,
-        None => return None,
-    };
+    let family = SocketFamily::from_i32(sock_info.soi_family)?;
     let socket_kind = SockInfo::from_i32(sock_info.soi_kind)?;
 
     // Access to union field in unsafe, but we already checked that this is a TCP connection.
@@ -261,10 +257,7 @@ fn parse_tcp_socket_info(sinfo: SocketFDInfo) -> Option<TcpSocketInfo> {
 
 fn parse_udp_socket_info(sinfo: SocketFDInfo) -> Option<UdpSocketInfo> {
     let sock_info = sinfo.psi;
-    let family = match SocketFamily::from_i32(sock_info.soi_family) {
-        Some(family) => family,
-        None => return None,
-    };
+    let family = SocketFamily::from_i32(sock_info.soi_family)?;
     let socket_kind = SockInfo::from_i32(sock_info.soi_kind)?;
 
     // Access to union field in unsafe, but we already checked that this is a In connection.
@@ -296,7 +289,7 @@ pub fn iterate_netstat_info(
 
     let pids = list_pids(ProcFilter::All)?;
 
-    let mut results = vec![];
+    let mut results = Vec::new();
 
     for pid in pids {
         // This will fail on PermissionDenied if we are not sufficiently privileged.
@@ -310,58 +303,59 @@ pub fn iterate_netstat_info(
             }
         };
 
-        let pname = match get_process_name(pid as i32) {
-            Ok(pname) => pname,
-            Err(_) => String::from("Unknown"),
-        };
+        let mut process_name: Option<String> = None;
 
         for fd in fds {
             let proc_fdtype: ProcFDType = fd.proc_fdtype.into();
-            match proc_fdtype {
-                ProcFDType::Socket => {
-                    let sock_fd_info = match get_fd_information(pid, fd) {
-                        Ok(fd_info) => fd_info,
-                        Err(e) => {
-                            results.push(Err(e));
-                            continue;
+            if let ProcFDType::Socket = proc_fdtype {
+                let sock_fd_info = match get_fd_information(pid, fd) {
+                    Ok(fd_info) => fd_info,
+                    Err(e) => {
+                        results.push(Err(e));
+                        continue;
+                    }
+                };
+
+                /* let sock_info_kind: SocketInfoKind = sock_fd_info.psi.soi_kind.into();
+                match sock_info_kind {
+                    SocketInfoKind::In | SocketInfoKind::Tcp  => {
+                        // TODO: Handle more socket kinds if needed
+                    },
+                    _ => {},
+                } */
+
+                if (ipv4 && sock_fd_info.psi.soi_family == AF_INET as i32)
+                    || (ipv6 && sock_fd_info.psi.soi_family == AF_INET6 as i32)
+                {
+                    if tcp && sock_fd_info.psi.soi_protocol == IPPROTO_TCP as i32 {
+                        if let Some(row) = parse_tcp_socket_info(sock_fd_info) {
+                            let pname = process_name.get_or_insert_with(|| {
+                                get_process_name(pid as i32).unwrap_or_else(|_| "Unknown".into())
+                            });
+                            results.push(Ok(SocketInfo {
+                                protocol_socket_info: ProtocolSocketInfo::Tcp(row),
+                                processes: vec![Process {
+                                    pid,
+                                    name: pname.clone(),
+                                }],
+                            }));
                         }
-                    };
-
-                    /* let sock_info_kind: SocketInfoKind = sock_fd_info.psi.soi_kind.into();
-                    match sock_info_kind {
-                        SocketInfoKind::In | SocketInfoKind::Tcp  => {
-                            // TODO: Handle more socket kinds if needed
-                        },
-                        _ => {},
-                    } */
-
-                    if (ipv4 && sock_fd_info.psi.soi_family == AF_INET as i32)
-                        || (ipv6 && sock_fd_info.psi.soi_family == AF_INET6 as i32)
+                    } else if udp
+                        && sock_fd_info.psi.soi_protocol == IPPROTO_UDP as i32
+                        && let Some(row) = parse_udp_socket_info(sock_fd_info)
                     {
-                        if tcp && sock_fd_info.psi.soi_protocol == IPPROTO_TCP as i32 {
-                            if let Some(row) = parse_tcp_socket_info(sock_fd_info) {
-                                results.push(Ok(SocketInfo {
-                                    protocol_socket_info: ProtocolSocketInfo::Tcp(row),
-                                    processes: vec![Process {
-                                        pid: pid as u32,
-                                        name: pname.clone(),
-                                    }],
-                                }));
-                            }
-                        } else if udp && sock_fd_info.psi.soi_protocol == IPPROTO_UDP as i32 {
-                            if let Some(row) = parse_udp_socket_info(sock_fd_info) {
-                                results.push(Ok(SocketInfo {
-                                    protocol_socket_info: ProtocolSocketInfo::Udp(row),
-                                    processes: vec![Process {
-                                        pid: pid as u32,
-                                        name: pname.clone(),
-                                    }],
-                                }));
-                            }
-                        }
+                        let pname = process_name.get_or_insert_with(|| {
+                            get_process_name(pid as i32).unwrap_or_else(|_| "Unknown".into())
+                        });
+                        results.push(Ok(SocketInfo {
+                            protocol_socket_info: ProtocolSocketInfo::Udp(row),
+                            processes: vec![Process {
+                                pid,
+                                name: pname.clone(),
+                            }],
+                        }));
                     }
                 }
-                _ => {}
             }
         }
     }

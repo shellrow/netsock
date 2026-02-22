@@ -31,7 +31,7 @@ impl SocketTable for MIB_TCPTABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCPTABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_TCPROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or(String::from("Unknown"));
+        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Tcp(TcpSocketInfo {
                 local_addr: IpAddr::V4(Ipv4Addr::from(u32::from_be(row.dwLocalAddr))),
@@ -60,7 +60,7 @@ impl SocketTable for MIB_TCP6TABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCP6TABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_TCP6ROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or(String::from("Unknown"));
+        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Tcp(TcpSocketInfo {
                 local_addr: IpAddr::V6(Ipv6Addr::from(row.ucLocalAddr)),
@@ -91,7 +91,7 @@ impl SocketTable for MIB_UDPTABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_UDPROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or(String::from("Unknown"));
+        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
                 local_addr: IpAddr::V4(Ipv4Addr::from(u32::from_be(row.dwLocalAddr))),
@@ -117,7 +117,7 @@ impl SocketTable for MIB_UDP6TABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDP6TABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_UDP6ROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or(String::from("Unknown"));
+        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
                 local_addr: IpAddr::V6(Ipv6Addr::from(row.ucLocalAddr)),
@@ -147,7 +147,7 @@ fn get_extended_tcp_table(address_family: u32) -> Result<Vec<u8>, Error> {
     let mut table = Vec::<u8>::new();
     let mut iterations = 0;
     while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = Vec::<u8>::with_capacity(table_size as usize);
+        table = vec![0u8; table_size as usize];
         err_code = unsafe {
             GetExtendedTcpTable(
                 table.as_mut_ptr() as *mut _,
@@ -164,7 +164,6 @@ fn get_extended_tcp_table(address_family: u32) -> Result<Vec<u8>, Error> {
         }
     }
     if err_code == NO_ERROR {
-        unsafe { table.set_len(table_size as usize) };
         Ok(table)
     } else {
         Err(Error::FailedToGetTcpTable(err_code as i32))
@@ -186,7 +185,7 @@ fn get_extended_udp_table(address_family: u32) -> Result<Vec<u8>, Error> {
     let mut table = Vec::<u8>::new();
     let mut iterations = 0;
     while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = Vec::<u8>::with_capacity(table_size as usize);
+        table = vec![0u8; table_size as usize];
         err_code = unsafe {
             GetExtendedUdpTable(
                 table.as_mut_ptr() as *mut _,

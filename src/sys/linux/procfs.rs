@@ -40,7 +40,7 @@ pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
             None => continue,
         };
 
-        let name = get_process_name(pid);
+        let mut process_name: Option<String> = None;
 
         let fd_entries = match read_dir(entry.path().join("fd")) {
             Ok(entries) => entries,
@@ -77,13 +77,11 @@ pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
                 .and_then(|rest| rest.strip_suffix(']'))
                 .and_then(|inode| inode.parse::<u32>().ok())
             {
-                pid_by_inode
-                    .entry(inode)
-                    .or_insert_with(Vec::new)
-                    .push(Process {
-                        pid,
-                        name: name.clone(),
-                    });
+                let name = process_name.get_or_insert_with(|| get_process_name(pid));
+                pid_by_inode.entry(inode).or_default().push(Process {
+                    pid,
+                    name: name.clone(),
+                });
             }
         }
     }

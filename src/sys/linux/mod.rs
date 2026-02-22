@@ -102,18 +102,18 @@ pub fn iter_sockets_without_processes(
     let mut iterators = Vec::with_capacity(4);
     if ipv4 {
         if tcp {
-            iterators.push(NetlinkIterator::new(AF_INET as u8, IPPROTO_TCP as u8)?);
+            iterators.push(NetlinkIterator::new(AF_INET, IPPROTO_TCP)?);
         }
         if udp {
-            iterators.push(NetlinkIterator::new(AF_INET as u8, IPPROTO_UDP as u8)?);
+            iterators.push(NetlinkIterator::new(AF_INET, IPPROTO_UDP)?);
         }
     }
     if ipv6 {
         if tcp {
-            iterators.push(NetlinkIterator::new(AF_INET6 as u8, IPPROTO_TCP as u8)?);
+            iterators.push(NetlinkIterator::new(AF_INET6, IPPROTO_TCP)?);
         }
         if udp {
-            iterators.push(NetlinkIterator::new(AF_INET6 as u8, IPPROTO_UDP as u8)?);
+            iterators.push(NetlinkIterator::new(AF_INET6, IPPROTO_UDP)?);
         }
     }
     Ok(iterators.into_iter().flatten())

@@ -148,34 +148,34 @@ impl SocketQuery {
 
     /// Returns true if the socket satisfies the query criteria.
     pub fn matches(&self, socket: &SocketInfo) -> bool {
-        if let Some(addr) = self.local_addr {
-            if socket.local_addr() != addr {
-                return false;
-            }
+        if let Some(addr) = self.local_addr
+            && socket.local_addr() != addr
+        {
+            return false;
         }
 
-        if let Some(port) = self.local_port {
-            if socket.local_port() != port {
-                return false;
-            }
+        if let Some(port) = self.local_port
+            && socket.local_port() != port
+        {
+            return false;
         }
 
-        if let Some(addr) = self.remote_addr {
-            if socket.remote_addr() != Some(addr) {
-                return false;
-            }
+        if let Some(addr) = self.remote_addr
+            && socket.remote_addr() != Some(addr)
+        {
+            return false;
         }
 
-        if let Some(port) = self.remote_port {
-            if socket.remote_port() != Some(port) {
-                return false;
-            }
+        if let Some(port) = self.remote_port
+            && socket.remote_port() != Some(port)
+        {
+            return false;
         }
 
-        if let Some(pid) = self.owner_pid {
-            if !socket.is_owned_by_pid(pid) {
-                return false;
-            }
+        if let Some(pid) = self.owner_pid
+            && !socket.is_owned_by_pid(pid)
+        {
+            return false;
         }
 
         true
@@ -205,7 +205,7 @@ where
     type Item = Result<SocketInfo, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(item) = self.inner.next() {
+        for item in self.inner.by_ref() {
             match item {
                 Ok(socket) => {
                     if self.query.matches(&socket) {
