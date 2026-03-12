@@ -27,6 +27,10 @@ num-derive = "0.4"
 num-traits = "0.2"
 libproc = "0.14"
 
+[target.'cfg(target_os = "freebsd")'.build-dependencies]
+
+[target.'cfg(target_os = "freebsd")'.dependencies]
+
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.59"
 features = [

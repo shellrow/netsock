@@ -10,6 +10,12 @@ mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::*;
 
+// FreeBSD
+#[cfg(target_os = "freebsd")]
+mod freebsd;
+#[cfg(target_os = "freebsd")]
+pub use freebsd::*;
+
 // Windows
 #[cfg(target_os = "windows")]
 mod windows;
