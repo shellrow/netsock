@@ -18,6 +18,7 @@ Cross-platform library for inspecting network sockets and owning processes.
 - Linux
 - macOS
 - Windows
+- FreeBSD
 
 ## Installation
 Add `netsock` to your dependencies:
