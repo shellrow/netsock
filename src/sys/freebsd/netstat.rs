@@ -84,7 +84,7 @@ pub fn iterate_netstat_info(
             if kp.is_null() {
                 continue;
             }
-            
+
             let pid = (*kp).ki_pid;
             if pid <= 0 {
                 continue;
@@ -100,11 +100,11 @@ pub fn iterate_netstat_info(
 
             while !current_file.is_null() {
                 let fst = &*current_file;
-                
+
                 if fst.fs_type == PS_FST_TYPE_SOCKET {
                     let mut sockstat: sockstat = mem::zeroed();
                     let mut errbuf = [0i8; 256];
-                    
+
                     let ret = procstat_get_socket_info(
                         ps,
                         current_file,
@@ -115,10 +115,10 @@ pub fn iterate_netstat_info(
                     if ret == 0 {
                         let family = sockstat.dom_family;
                         let proto = sockstat.proto;
-                        
-                        let should_include = 
-                            ((ipv4 && family == AF_INET) || (ipv6 && family == AF_INET6)) &&
-                            ((tcp && proto == IPPROTO_TCP) || (udp && proto == IPPROTO_UDP));
+
+                        let should_include = ((ipv4 && family == AF_INET)
+                            || (ipv6 && family == AF_INET6))
+                            && ((tcp && proto == IPPROTO_TCP) || (udp && proto == IPPROTO_UDP));
 
                         if should_include {
                             if let Some(local) = parse_sockaddr(&sockstat.sa_local) {
@@ -126,9 +126,7 @@ pub fn iterate_netstat_info(
                                     get_process_name(pid).unwrap_or_else(|_| {
                                         let comm_ptr = (*kp).ki_comm.as_ptr();
                                         if !comm_ptr.is_null() {
-                                            CStr::from_ptr(comm_ptr)
-                                                .to_string_lossy()
-                                                .to_string()
+                                            CStr::from_ptr(comm_ptr).to_string_lossy().to_string()
                                         } else {
                                             format!("process_{}", pid)
                                         }
@@ -142,9 +140,18 @@ pub fn iterate_netstat_info(
 
                                 if tcp && proto == IPPROTO_TCP {
                                     let remote_opt = parse_sockaddr(&sockstat.sa_peer);
-                                    let (remote_addr, remote_port, state) = if let Some(remote) = remote_opt {
-                                        if remote.port() != 0 || !remote.ip().is_unspecified() {
-                                            (remote.ip(), remote.port(), TcpState::Established)
+                                    let (remote_addr, remote_port, state) =
+                                        if let Some(remote) = remote_opt {
+                                            if remote.port() != 0 || !remote.ip().is_unspecified() {
+                                                (remote.ip(), remote.port(), TcpState::Established)
+                                            } else {
+                                                let addr = if family == AF_INET {
+                                                    IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+                                                } else {
+                                                    IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+                                                };
+                                                (addr, 0, TcpState::Listen)
+                                            }
                                         } else {
                                             let addr = if family == AF_INET {
                                                 IpAddr::V4(Ipv4Addr::UNSPECIFIED)
@@ -152,15 +159,7 @@ pub fn iterate_netstat_info(
                                                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
                                             };
                                             (addr, 0, TcpState::Listen)
-                                        }
-                                    } else {
-                                        let addr = if family == AF_INET {
-                                            IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-                                        } else {
-                                            IpAddr::V6(Ipv6Addr::UNSPECIFIED)
                                         };
-                                        (addr, 0, TcpState::Listen)
-                                    };
 
                                     results.push(Ok(SocketInfo {
                                         protocol_socket_info: ProtocolSocketInfo::Tcp(

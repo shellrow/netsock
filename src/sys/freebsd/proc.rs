@@ -10,15 +10,11 @@ pub fn get_process_name(pid: c_int) -> Result<String, Error> {
         if let Some(name) = cmdline.split('\0').next() {
             if !name.is_empty() {
                 // Get just the executable name, not the full path
-                return Ok(name
-                    .split('/')
-                    .last()
-                    .unwrap_or(name)
-                    .to_string());
+                return Ok(name.split('/').last().unwrap_or(name).to_string());
             }
         }
     }
-    
+
     // Fallback to a generic name
     Ok(format!("process_{}", pid))
 }
