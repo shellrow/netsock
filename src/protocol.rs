@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     /// Flags representing different network protocols.
     ///
     /// This structure utilizes the `bitflags` macro to define a set of flags that can be combined

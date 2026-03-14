@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     /// Flags representing different address families for network operations.
     ///
     /// This structure uses the `bitflags` macro to create a set of flags that can be combined
