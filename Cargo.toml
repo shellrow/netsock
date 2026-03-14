@@ -11,7 +11,7 @@ keywords = ["network", "socket"]
 categories = ["network-programming", "os"]
 
 [dependencies]
-bitflags = "2.9"
+bitflags = "2.11"
 thiserror = "2.0"
 log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
