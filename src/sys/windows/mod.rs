@@ -122,17 +122,16 @@ pub fn iter_sockets_without_processes(
 mod tests {
     use crate::error::Error;
     use crate::socket::SocketInfo;
-    use crate::sys::windows::socket_table_iterator::SocketTableIterator;
     use crate::sys::windows::socket_table_extended::SocketTable;
+    use crate::sys::windows::socket_table_iterator::SocketTableIterator;
     use windows_sys::Win32::NetworkManagement::IpHelper::{
         MIB_TCP6TABLE_OWNER_PID, MIB_TCPTABLE, MIB_TCPTABLE_OWNER_PID, MIB_UDP6TABLE_OWNER_PID,
         MIB_UDPTABLE, MIB_UDPTABLE_OWNER_PID,
     };
 
     fn assert_table_iteration_succeeds<Table: SocketTable>() {
-        let table: Vec<Result<SocketInfo, Error>> = SocketTableIterator::new::<Table>()
-            .unwrap()
-            .collect();
+        let table: Vec<Result<SocketInfo, Error>> =
+            SocketTableIterator::new::<Table>().unwrap().collect();
         assert!(table.into_iter().all(|entry| entry.is_ok()));
     }
 

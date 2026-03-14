@@ -411,7 +411,15 @@ mod tests {
     fn socket_query_matches_process_name() {
         let socket = udp_socket();
 
-        assert!(SocketQuery::new().with_process_name("resolver").matches(&socket));
-        assert!(!SocketQuery::new().with_process_name("other").matches(&socket));
+        assert!(
+            SocketQuery::new()
+                .with_process_name("resolver")
+                .matches(&socket)
+        );
+        assert!(
+            !SocketQuery::new()
+                .with_process_name("other")
+                .matches(&socket)
+        );
     }
 }
