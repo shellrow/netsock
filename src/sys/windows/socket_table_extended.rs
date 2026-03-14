@@ -1,4 +1,6 @@
-use super::proc::get_process_name;
+use std::collections::HashMap;
+
+use super::proc::get_process_names;
 use crate::error::*;
 use crate::process::Process;
 use crate::socket::SocketInfo;
@@ -16,7 +18,21 @@ use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
 pub trait SocketTable {
     fn get_table() -> Result<Vec<u8>, Error>;
     fn get_rows_count(table: &[u8]) -> usize;
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo;
+    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+        Ok(HashMap::new())
+    }
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo;
+}
+
+fn process_name(process_names: Option<&HashMap<u32, String>>, pid: u32) -> String {
+    process_names
+        .and_then(|process_names| process_names.get(&pid))
+        .cloned()
+        .unwrap_or_else(|| "Unknown".into())
 }
 
 impl SocketTable for MIB_TCPTABLE_OWNER_PID {
@@ -27,11 +43,17 @@ impl SocketTable for MIB_TCPTABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCPTABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
+    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+        get_process_names()
+    }
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCPTABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_TCPROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Tcp(TcpSocketInfo {
                 local_addr: IpAddr::V4(Ipv4Addr::from(u32::from_be(row.dwLocalAddr))),
@@ -42,7 +64,7 @@ impl SocketTable for MIB_TCPTABLE_OWNER_PID {
             }),
             processes: vec![Process {
                 pid: row.dwOwningPid,
-                name: pname,
+                name: process_name(process_names, row.dwOwningPid),
             }],
         }
     }
@@ -56,24 +78,28 @@ impl SocketTable for MIB_TCP6TABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCP6TABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
+    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+        get_process_names()
+    }
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCP6TABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_TCP6ROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Tcp(TcpSocketInfo {
                 local_addr: IpAddr::V6(Ipv6Addr::from(row.ucLocalAddr)),
-                // local_scope: Option::Some(row.dwLocalScopeId),
                 local_port: u16::from_be(row.dwLocalPort as u16),
                 remote_addr: IpAddr::V6(Ipv6Addr::from(row.ucRemoteAddr)),
-                // remote_scope: Option::Some(row.dwRemoteScopeId),
                 remote_port: u16::from_be(row.dwRemotePort as u16),
                 state: TcpState::from(row.dwState),
             }),
             processes: vec![Process {
                 pid: row.dwOwningPid,
-                name: pname,
+                name: process_name(process_names, row.dwOwningPid),
             }],
         }
     }
@@ -87,11 +113,17 @@ impl SocketTable for MIB_UDPTABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
+    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+        get_process_names()
+    }
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_UDPROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
                 local_addr: IpAddr::V4(Ipv4Addr::from(u32::from_be(row.dwLocalAddr))),
@@ -99,7 +131,7 @@ impl SocketTable for MIB_UDPTABLE_OWNER_PID {
             }),
             processes: vec![Process {
                 pid: row.dwOwningPid,
-                name: pname,
+                name: process_name(process_names, row.dwOwningPid),
             }],
         }
     }
@@ -113,20 +145,25 @@ impl SocketTable for MIB_UDP6TABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDP6TABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
+    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+        get_process_names()
+    }
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDP6TABLE_OWNER_PID) };
         let rows_ptr = &table.table[0] as *const MIB_UDP6ROW_OWNER_PID;
         let row = unsafe { &*rows_ptr.add(index) };
-        let pname = get_process_name(row.dwOwningPid).unwrap_or_else(|_| "Unknown".into());
         SocketInfo {
             protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
                 local_addr: IpAddr::V6(Ipv6Addr::from(row.ucLocalAddr)),
-                // local_scope: Option::Some(row.dwLocalScopeId),
                 local_port: u16::from_be(row.dwLocalPort as u16),
             }),
             processes: vec![Process {
                 pid: row.dwOwningPid,
-                name: pname,
+                name: process_name(process_names, row.dwOwningPid),
             }],
         }
     }
