@@ -1,6 +1,6 @@
 [package]
 name = "netsock"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 authors = ["shellrow <shellrow@foctal.com>"]
 description = "Cross-platform library for network sockets information"
@@ -11,7 +11,7 @@ keywords = ["network", "socket"]
 categories = ["network-programming", "os"]
 
 [dependencies]
-bitflags = "2.9"
+bitflags = "2.11"
 thiserror = "2.0"
 log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
@@ -32,7 +32,7 @@ libproc = "0.14"
 [target.'cfg(target_os = "freebsd")'.dependencies]
 
 [target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.59"
+version = "0.61"
 features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",

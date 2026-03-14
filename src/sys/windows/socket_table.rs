@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::error::*;
 use crate::socket::SocketInfo;
 use crate::socket::{ProtocolSocketInfo, TcpSocketInfo, UdpSocketInfo};
@@ -18,7 +20,11 @@ impl SocketTable for MIB_TCPTABLE {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCPTABLE) };
         table.dwNumEntries as usize
     }
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        _process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCPTABLE) };
         let rows_ptr = &table.table[0] as *const MIB_TCPROW_LH;
         let row = unsafe { &*rows_ptr.add(index) };
@@ -44,7 +50,11 @@ impl SocketTable for MIB_UDPTABLE {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE) };
         table.dwNumEntries as usize
     }
-    fn get_socket_info(table: &[u8], index: usize) -> SocketInfo {
+    fn get_socket_info(
+        table: &[u8],
+        index: usize,
+        _process_names: Option<&HashMap<u32, String>>,
+    ) -> SocketInfo {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE) };
         let rows_ptr = &table.table[0] as *const MIB_UDPROW;
         let row = unsafe { &*rows_ptr.add(index) };

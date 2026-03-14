@@ -1,7 +1,7 @@
 //! Cross-platform socket inspection for TCP and UDP.
 //!
 //! `netsock` provides iterators and collection APIs for enumerating sockets on
-//! Linux, macOS, and Windows.
+//! Linux, macOS, Windows, and FreeBSD.
 
 pub mod error;
 pub mod family;
