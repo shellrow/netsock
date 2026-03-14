@@ -25,14 +25,14 @@ Add `netsock` to your dependencies:
 
 ```toml
 [dependencies]
-netsock = "0.6"
+netsock = "0.7"
 ```
 
 Enable serde support if needed:
 
 ```toml
 [dependencies]
-netsock = { version = "0.6", features = ["serde"] }
+netsock = { version = "0.7", features = ["serde"] }
 ```
 
 See [examples][examples-url] and [API docs][doc-url] for more details.
