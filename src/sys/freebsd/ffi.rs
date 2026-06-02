@@ -34,7 +34,7 @@ pub struct kinfo_proc {
     pub ki_sid: i32,
     pub ki_tsid: i32,
     pub ki_jobc: c_int,
-    pub ki_tdev: u64,
+    pub ki_tdev_freebsd11: u32,
     pub ki_siglist: [u32; 4],
     pub ki_sigmask: [u32; 4],
     pub ki_sigignore: [u32; 4],
@@ -71,7 +71,7 @@ pub struct kinfo_proc {
     pub ki_rqindex: c_char,
     pub ki_oncpu_old: c_char,
     pub ki_lastcpu_old: c_char,
-    pub ki_tdname: [c_char; 20],
+    pub ki_tdname: [c_char; 17],
     pub ki_wmesg: [c_char; 9],
     pub ki_login: [c_char; 18],
     pub ki_lockname: [c_char; 9],
@@ -81,6 +81,7 @@ pub struct kinfo_proc {
     pub ki_moretdname: [c_char; 4],
     pub ki_sparestrings: [[c_char; 23]; 2],
     pub ki_spareints: [c_int; 2],
+    pub ki_tdev: u64,
     pub ki_oncpu: c_int,
     pub ki_lastcpu: c_int,
     pub ki_tracer: c_int,
@@ -90,7 +91,7 @@ pub struct kinfo_proc {
     pub ki_jid: c_int,
     pub ki_numthreads: c_int,
     pub ki_tid: i32,
-    pub ki_pri: [u8; 36],
+    pub ki_pri: [u8; 4],
     pub ki_rusage: [u8; 144],
     pub ki_rusage_ch: [u8; 144],
     pub ki_pcb: *mut c_void,
@@ -102,6 +103,9 @@ pub struct kinfo_proc {
     pub ki_sflag: i64,
     pub ki_tdflags: i64,
 }
+
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+const _: [(); 1088] = [(); std::mem::size_of::<kinfo_proc>()];
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
