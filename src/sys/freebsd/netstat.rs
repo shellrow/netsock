@@ -1,7 +1,6 @@
 use std::ffi::CStr;
-use std::mem::MaybeUninit;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::os::raw::{c_char, c_int, c_uint};
+use std::os::raw::{c_int, c_uint};
 use std::ptr::NonNull;
 
 use crate::error::Error;
@@ -94,29 +93,40 @@ impl Drop for ProcList {
     }
 }
 
-struct FileList {
-    procstat: *mut procstat,
-    files: NonNull<filestat_list>,
+struct KinfoFileList {
+    files: NonNull<kinfo_file>,
+    count: usize,
 }
 
-impl FileList {
-    fn load(procstat: &ProcstatHandle, process: *mut kinfo_proc) -> Option<Self> {
-        let files = NonNull::new(unsafe { procstat_getfiles(procstat.as_ptr(), process, 0) })?;
-        Some(Self {
-            procstat: procstat.as_ptr(),
+impl KinfoFileList {
+    fn load(pid: c_int) -> Result<Option<Self>, Error> {
+        let mut count: c_int = 0;
+        let files = NonNull::new(unsafe { kinfo_getfile(pid, &mut count) });
+        let Some(files) = files else {
+            let err = std::io::Error::last_os_error();
+            match err.raw_os_error() {
+                Some(code) if code == libc_errno::ESRCH || code == libc_errno::EPERM => {
+                    return Ok(None);
+                }
+                _ => return Err(Error::FailedToQueryFileDescriptors(err)),
+            }
+        };
+
+        Ok(Some(Self {
             files,
-        })
+            count: count as usize,
+        }))
     }
 
-    fn head(&self) -> *mut filestat {
-        unsafe { self.files.as_ref().stqh_first }
+    fn get(&self, index: usize) -> Option<&kinfo_file> {
+        (index < self.count).then(|| unsafe { &*self.files.as_ptr().add(index) })
     }
 }
 
-impl Drop for FileList {
+impl Drop for KinfoFileList {
     fn drop(&mut self) {
         unsafe {
-            procstat_freefiles(self.procstat, self.files.as_ptr());
+            free(self.files.as_ptr().cast());
         }
     }
 }
@@ -179,21 +189,6 @@ fn fallback_process_name(process: &kinfo_proc, pid: c_int) -> String {
         .into_owned()
 }
 
-fn load_socket_info(procstat: &ProcstatHandle, file: *mut filestat) -> Option<sockstat> {
-    let mut sockstat = MaybeUninit::<sockstat>::uninit();
-    let mut errbuf = [0 as c_char; 256];
-    let status = unsafe {
-        procstat_get_socket_info(
-            procstat.as_ptr(),
-            file,
-            sockstat.as_mut_ptr(),
-            errbuf.as_mut_ptr(),
-        )
-    };
-
-    (status == 0).then(|| unsafe { sockstat.assume_init() })
-}
-
 pub fn iterate_netstat_info(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
@@ -218,75 +213,77 @@ pub fn iterate_netstat_info(
             continue;
         }
 
-        let Some(files) = FileList::load(&procstat, process_ptr) else {
+        let Some(files) = KinfoFileList::load(pid)? else {
             continue;
         };
 
         let mut process_name: Option<String> = None;
-        let mut current_file = files.head();
-
-        while let Some(file_ptr) = NonNull::new(current_file) {
-            let file = unsafe { file_ptr.as_ref() };
-
-            if file.fs_type == PS_FST_TYPE_SOCKET
-                && let Some(sockstat) = load_socket_info(&procstat, file_ptr.as_ptr())
-            {
-                let family = sockstat.dom_family;
-                let protocol = sockstat.proto;
-
-                if should_include_socket(family, protocol, ipv4, ipv6, tcp, udp)
-                    && let Some(local) = parse_sockaddr(&sockstat.sa_local)
-                {
-                    let process_name = process_name.get_or_insert_with(|| {
-                        get_process_name(pid)
-                            .unwrap_or_else(|_| fallback_process_name(process, pid))
-                    });
-
-                    let processes = vec![Process {
-                        pid: pid as u32,
-                        name: process_name.clone(),
-                    }];
-
-                    match protocol {
-                        IPPROTO_TCP => {
-                            let (remote_addr, remote_port, state) =
-                                tcp_peer_details(parse_sockaddr(&sockstat.sa_peer), family);
-                            results.push(Ok(SocketInfo {
-                                protocol_socket_info: ProtocolSocketInfo::Tcp(TcpSocketInfo {
-                                    local_addr: local.ip(),
-                                    local_port: local.port(),
-                                    remote_addr,
-                                    remote_port,
-                                    state,
-                                }),
-                                processes,
-                            }));
-                        }
-                        IPPROTO_UDP => {
-                            results.push(Ok(SocketInfo {
-                                protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
-                                    local_addr: local.ip(),
-                                    local_port: local.port(),
-                                }),
-                                processes,
-                            }));
-                        }
-                        _ => {}
-                    }
-                }
+        for file_index in 0..files.count {
+            let Some(file) = files.get(file_index) else {
+                continue;
+            };
+            if file.kf_type != KF_TYPE_SOCKET {
+                continue;
             }
 
-            current_file = file.next.stqe_next;
+            let family = unsafe { file.socket_family() };
+            let protocol = unsafe { file.socket_protocol() };
+
+            if should_include_socket(family, protocol, ipv4, ipv6, tcp, udp)
+                && let Some(local) = parse_sockaddr(unsafe { file.socket_local_addr() })
+            {
+                let process_name = process_name.get_or_insert_with(|| {
+                    get_process_name(pid).unwrap_or_else(|_| fallback_process_name(process, pid))
+                });
+
+                let processes = vec![Process {
+                    pid: pid as u32,
+                    name: process_name.clone(),
+                }];
+
+                match protocol {
+                    IPPROTO_TCP => {
+                        let (remote_addr, remote_port, state) = tcp_peer_details(
+                            parse_sockaddr(unsafe { file.socket_peer_addr() }),
+                            family,
+                        );
+                        results.push(Ok(SocketInfo {
+                            protocol_socket_info: ProtocolSocketInfo::Tcp(TcpSocketInfo {
+                                local_addr: local.ip(),
+                                local_port: local.port(),
+                                remote_addr,
+                                remote_port,
+                                state,
+                            }),
+                            processes,
+                        }));
+                    }
+                    IPPROTO_UDP => {
+                        results.push(Ok(SocketInfo {
+                            protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
+                                local_addr: local.ip(),
+                                local_port: local.port(),
+                            }),
+                            processes,
+                        }));
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
     Ok(results.into_iter())
 }
 
+mod libc_errno {
+    pub const EPERM: i32 = 1;
+    pub const ESRCH: i32 = 3;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr, TcpListener, UdpSocket};
 
     #[test]
     #[ignore = "requires a stable live FreeBSD process/socket environment"]
