@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::c_void;
 
 use super::proc::get_process_names;
 use crate::error::*;
@@ -18,7 +19,7 @@ use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
 pub trait SocketTable {
     fn get_table() -> Result<Vec<u8>, Error>;
     fn get_rows_count(table: &[u8]) -> usize;
-    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+    fn get_process_names() -> Result<HashMap<u32, String>, Error> {
         Ok(HashMap::new())
     }
     fn get_socket_info(
@@ -28,11 +29,38 @@ pub trait SocketTable {
     ) -> SocketInfo;
 }
 
+pub type ProcessNameMap = HashMap<u32, String>;
+
 fn process_name(process_names: Option<&HashMap<u32, String>>, pid: u32) -> String {
     process_names
         .and_then(|process_names| process_names.get(&pid))
         .cloned()
         .unwrap_or_else(|| "Unknown".into())
+}
+
+pub(super) fn get_table_with_retry(
+    mut load: impl FnMut(*mut c_void, &mut u32) -> u32,
+    error: impl Fn(i32) -> Error,
+) -> Result<Vec<u8>, Error> {
+    let mut table_size = 0;
+    let mut err_code = load(std::ptr::null_mut(), &mut table_size);
+    let mut table = Vec::<u8>::new();
+    let mut iterations = 0;
+
+    while err_code == ERROR_INSUFFICIENT_BUFFER {
+        table = vec![0u8; table_size as usize];
+        err_code = load(table.as_mut_ptr().cast(), &mut table_size);
+        iterations += 1;
+        if iterations > 100 {
+            return Err(Error::FailedToAllocateBuffer);
+        }
+    }
+
+    if err_code == NO_ERROR {
+        Ok(table)
+    } else {
+        Err(error(err_code as i32))
+    }
 }
 
 impl SocketTable for MIB_TCPTABLE_OWNER_PID {
@@ -43,7 +71,7 @@ impl SocketTable for MIB_TCPTABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCPTABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+    fn get_process_names() -> Result<HashMap<u32, String>, Error> {
         get_process_names()
     }
     fn get_socket_info(
@@ -78,7 +106,7 @@ impl SocketTable for MIB_TCP6TABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_TCP6TABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+    fn get_process_names() -> Result<HashMap<u32, String>, Error> {
         get_process_names()
     }
     fn get_socket_info(
@@ -113,7 +141,7 @@ impl SocketTable for MIB_UDPTABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDPTABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+    fn get_process_names() -> Result<HashMap<u32, String>, Error> {
         get_process_names()
     }
     fn get_socket_info(
@@ -145,7 +173,7 @@ impl SocketTable for MIB_UDP6TABLE_OWNER_PID {
         let table = unsafe { &*(table.as_ptr() as *const MIB_UDP6TABLE_OWNER_PID) };
         table.dwNumEntries as usize
     }
-    fn get_process_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
+    fn get_process_names() -> Result<HashMap<u32, String>, Error> {
         get_process_names()
     }
     fn get_socket_info(
@@ -170,77 +198,33 @@ impl SocketTable for MIB_UDP6TABLE_OWNER_PID {
 }
 
 fn get_extended_tcp_table(address_family: u32) -> Result<Vec<u8>, Error> {
-    let mut table_size: u32 = 0;
-    let mut err_code = unsafe {
-        GetExtendedTcpTable(
-            std::ptr::null_mut(),
-            &mut table_size,
-            FALSE,
-            address_family,
-            TCP_TABLE_OWNER_PID_ALL,
-            0,
-        )
-    };
-    let mut table = Vec::<u8>::new();
-    let mut iterations = 0;
-    while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = vec![0u8; table_size as usize];
-        err_code = unsafe {
+    get_table_with_retry(
+        |table, table_size| unsafe {
             GetExtendedTcpTable(
-                table.as_mut_ptr() as *mut _,
-                &mut table_size,
+                table,
+                table_size,
                 FALSE,
                 address_family,
                 TCP_TABLE_OWNER_PID_ALL,
                 0,
             )
-        };
-        iterations += 1;
-        if iterations > 100 {
-            return Result::Err(Error::FailedToAllocateBuffer);
-        }
-    }
-    if err_code == NO_ERROR {
-        Ok(table)
-    } else {
-        Err(Error::FailedToGetTcpTable(err_code as i32))
-    }
+        },
+        Error::FailedToGetTcpTable,
+    )
 }
 
 fn get_extended_udp_table(address_family: u32) -> Result<Vec<u8>, Error> {
-    let mut table_size: u32 = 0;
-    let mut err_code = unsafe {
-        GetExtendedUdpTable(
-            std::ptr::null_mut(),
-            &mut table_size,
-            FALSE,
-            address_family,
-            UDP_TABLE_OWNER_PID,
-            0,
-        )
-    };
-    let mut table = Vec::<u8>::new();
-    let mut iterations = 0;
-    while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = vec![0u8; table_size as usize];
-        err_code = unsafe {
+    get_table_with_retry(
+        |table, table_size| unsafe {
             GetExtendedUdpTable(
-                table.as_mut_ptr() as *mut _,
-                &mut table_size,
+                table,
+                table_size,
                 FALSE,
                 address_family,
                 UDP_TABLE_OWNER_PID,
                 0,
             )
-        };
-        iterations += 1;
-        if iterations > 100 {
-            return Result::Err(Error::FailedToAllocateBuffer);
-        }
-    }
-    if err_code == NO_ERROR {
-        Ok(table)
-    } else {
-        Err(Error::FailedToGetUdpTable(err_code as i32))
-    }
+        },
+        Error::FailedToGetUdpTable,
+    )
 }
