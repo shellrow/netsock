@@ -154,10 +154,34 @@ pub struct kinfo_file_socket_compat {
 }
 
 #[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct kinfo_file_socket {
+    pub kf_sock_sendq: u32,
+    pub kf_sock_domain0: c_int,
+    pub kf_sock_type0: c_int,
+    pub kf_sock_protocol0: c_int,
+    pub kf_sa_local: sockaddr_storage,
+    pub kf_sa_peer: sockaddr_storage,
+    pub kf_sock_pcb: u64,
+    pub kf_sock_inpcb: u64,
+    pub kf_sock_unpconn: u64,
+    pub kf_sock_snd_sb_state: u16,
+    pub kf_sock_rcv_sb_state: u16,
+    pub kf_sock_recvq: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union kinfo_file_nested_union {
+    pub kf_sock: kinfo_file_socket,
+    pub raw: [u8; 304],
+}
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub union kinfo_file_union {
     pub compat: kinfo_file_socket_compat,
-    pub raw: [u8; 304],
+    pub nested: kinfo_file_nested_union,
 }
 
 #[repr(C)]
@@ -184,19 +208,19 @@ const _: [(); 1392] = [(); std::mem::size_of::<kinfo_file>()];
 
 impl kinfo_file {
     pub unsafe fn socket_family(&self) -> c_int {
-        unsafe { self.kf_un.compat.kf_sock_domain }
+        unsafe { self.kf_un.nested.kf_sock.kf_sock_domain0 }
     }
 
     pub unsafe fn socket_protocol(&self) -> c_int {
-        unsafe { self.kf_un.compat.kf_sock_protocol }
+        unsafe { self.kf_un.nested.kf_sock.kf_sock_protocol0 }
     }
 
     pub unsafe fn socket_local_addr(&self) -> &sockaddr_storage {
-        unsafe { &self.kf_un.compat.kf_sa_local }
+        unsafe { &self.kf_un.nested.kf_sock.kf_sa_local }
     }
 
     pub unsafe fn socket_peer_addr(&self) -> &sockaddr_storage {
-        unsafe { &self.kf_un.compat.kf_sa_peer }
+        unsafe { &self.kf_un.nested.kf_sock.kf_sa_peer }
     }
 }
 
