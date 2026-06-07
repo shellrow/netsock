@@ -1,6 +1,6 @@
 [package]
 name = "netsock"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 authors = ["shellrow <shellrow@foctal.com>"]
 description = "Cross-platform library for network sockets information"
