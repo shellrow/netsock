@@ -1,15 +1,15 @@
-use std::collections::HashMap;
-
 use crate::error::*;
 use crate::socket::SocketInfo;
-use crate::sys::windows::socket_table_extended::SocketTable;
+use crate::sys::windows::socket_table_extended::{ProcessNameMap, SocketTable};
+
+type SocketInfoGetter = fn(&[u8], usize, Option<&ProcessNameMap>) -> SocketInfo;
 
 pub struct SocketTableIterator {
     table: Vec<u8>,
     rows_count: usize,
     current_row_index: usize,
-    process_names: Option<HashMap<u32, String>>,
-    info_getter: fn(&[u8], usize, Option<&HashMap<u32, String>>) -> SocketInfo,
+    process_names: Option<ProcessNameMap>,
+    info_getter: SocketInfoGetter,
 }
 
 impl SocketTableIterator {

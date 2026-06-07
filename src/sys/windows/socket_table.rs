@@ -4,9 +4,9 @@ use crate::error::*;
 use crate::socket::SocketInfo;
 use crate::socket::{ProtocolSocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
-use crate::sys::windows::socket_table_extended::SocketTable;
+use crate::sys::windows::socket_table_extended::{SocketTable, get_table_with_retry};
 use std::net::{IpAddr, Ipv4Addr};
-use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, FALSE, NO_ERROR};
+use windows_sys::Win32::Foundation::FALSE;
 use windows_sys::Win32::NetworkManagement::IpHelper::{
     GetTcpTable, GetUdpTable, MIB_TCPROW_LH, MIB_TCPTABLE, MIB_UDPROW, MIB_UDPTABLE,
 };
@@ -69,41 +69,15 @@ impl SocketTable for MIB_UDPTABLE {
 }
 
 fn get_tcp_table(_address_family: u32) -> Result<Vec<u8>, Error> {
-    let mut table_size: u32 = 0;
-    let mut err_code = unsafe { GetTcpTable(std::ptr::null_mut(), &mut table_size, FALSE) };
-    let mut table = Vec::<u8>::new();
-    let mut iterations = 0;
-    while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = vec![0u8; table_size as usize];
-        err_code = unsafe { GetTcpTable(table.as_mut_ptr() as *mut _, &mut table_size, FALSE) };
-        iterations += 1;
-        if iterations > 100 {
-            return Result::Err(Error::FailedToAllocateBuffer);
-        }
-    }
-    if err_code == NO_ERROR {
-        Ok(table)
-    } else {
-        Err(Error::FailedToGetTcpTable(err_code as i32))
-    }
+    get_table_with_retry(
+        |table, table_size| unsafe { GetTcpTable(table.cast(), table_size, FALSE) },
+        Error::FailedToGetTcpTable,
+    )
 }
 
 fn get_udp_table(_address_family: u32) -> Result<Vec<u8>, Error> {
-    let mut table_size: u32 = 0;
-    let mut err_code = unsafe { GetUdpTable(std::ptr::null_mut(), &mut table_size, FALSE) };
-    let mut table = Vec::<u8>::new();
-    let mut iterations = 0;
-    while err_code == ERROR_INSUFFICIENT_BUFFER {
-        table = vec![0u8; table_size as usize];
-        err_code = unsafe { GetUdpTable(table.as_mut_ptr() as *mut _, &mut table_size, FALSE) };
-        iterations += 1;
-        if iterations > 100 {
-            return Result::Err(Error::FailedToAllocateBuffer);
-        }
-    }
-    if err_code == NO_ERROR {
-        Ok(table)
-    } else {
-        Err(Error::FailedToGetUdpTable(err_code as i32))
-    }
+    get_table_with_retry(
+        |table, table_size| unsafe { GetUdpTable(table.cast(), table_size, FALSE) },
+        Error::FailedToGetUdpTable,
+    )
 }

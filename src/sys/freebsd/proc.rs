@@ -4,7 +4,7 @@ use crate::error::Error;
 
 pub fn get_process_name(pid: c_int) -> Result<String, Error> {
     // On FreeBSD, we read the process name from /proc/<pid>/cmdline
-    // or use ki_comm from kinfo_proc
+    // (only available if procfs is mounted; caller falls back to ki_comm if this fails)
     let path = format!("/proc/{}/cmdline", pid);
     if let Ok(cmdline) = std::fs::read_to_string(&path) {
         if let Some(name) = cmdline.split('\0').next() {
@@ -15,6 +15,7 @@ pub fn get_process_name(pid: c_int) -> Result<String, Error> {
         }
     }
 
-    // Fallback to a generic name
-    Ok(format!("process_{}", pid))
+    Err(Error::FailedToListProcesses(std::io::Error::other(
+        "procfs not available",
+    )))
 }

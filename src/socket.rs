@@ -422,4 +422,47 @@ mod tests {
                 .matches(&socket)
         );
     }
+
+    #[test]
+    fn socket_query_matches_remote_endpoint_and_owner_pid() {
+        let socket = tcp_socket();
+
+        assert!(
+            SocketQuery::new()
+                .with_remote_addr(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 10)))
+                .with_remote_port(443)
+                .with_owner_pid(42)
+                .matches(&socket)
+        );
+        assert!(
+            !SocketQuery::new()
+                .with_remote_port(80)
+                .with_owner_pid(100)
+                .matches(&socket)
+        );
+    }
+
+    #[test]
+    fn filter_by_query_skips_non_matches_and_preserves_errors() {
+        let items = vec![
+            Ok(udp_socket()),
+            Err(Error::NotAValidSocket),
+            Ok(tcp_socket()),
+        ];
+        let mut iter = items.into_iter().filter_by_query(
+            SocketQuery::new()
+                .with_protocol_flags(ProtocolFlags::TCP)
+                .with_local_port(8080),
+        );
+
+        assert!(matches!(iter.next(), Some(Err(Error::NotAValidSocket))));
+        assert!(matches!(
+            iter.next(),
+            Some(Ok(SocketInfo {
+                protocol_socket_info: ProtocolSocketInfo::Tcp(_),
+                ..
+            }))
+        ));
+        assert!(iter.next().is_none());
+    }
 }

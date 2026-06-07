@@ -5,6 +5,8 @@
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 
 pub const KERN_PROC_PROC: c_int = 8;
+pub const KF_TYPE_SOCKET: c_int = 2;
+const PATH_MAX: usize = 1024;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -32,7 +34,7 @@ pub struct kinfo_proc {
     pub ki_sid: i32,
     pub ki_tsid: i32,
     pub ki_jobc: c_int,
-    pub ki_tdev: u64,
+    pub ki_tdev_freebsd11: u32,
     pub ki_siglist: [u32; 4],
     pub ki_sigmask: [u32; 4],
     pub ki_sigignore: [u32; 4],
@@ -69,7 +71,7 @@ pub struct kinfo_proc {
     pub ki_rqindex: c_char,
     pub ki_oncpu_old: c_char,
     pub ki_lastcpu_old: c_char,
-    pub ki_tdname: [c_char; 20],
+    pub ki_tdname: [c_char; 17],
     pub ki_wmesg: [c_char; 9],
     pub ki_login: [c_char; 18],
     pub ki_lockname: [c_char; 9],
@@ -79,6 +81,7 @@ pub struct kinfo_proc {
     pub ki_moretdname: [c_char; 4],
     pub ki_sparestrings: [[c_char; 23]; 2],
     pub ki_spareints: [c_int; 2],
+    pub ki_tdev: u64,
     pub ki_oncpu: c_int,
     pub ki_lastcpu: c_int,
     pub ki_tracer: c_int,
@@ -88,7 +91,7 @@ pub struct kinfo_proc {
     pub ki_jid: c_int,
     pub ki_numthreads: c_int,
     pub ki_tid: i32,
-    pub ki_pri: [u8; 36],
+    pub ki_pri: [u8; 4],
     pub ki_rusage: [u8; 144],
     pub ki_rusage_ch: [u8; 144],
     pub ki_pcb: *mut c_void,
@@ -100,6 +103,9 @@ pub struct kinfo_proc {
     pub ki_sflag: i64,
     pub ki_tdflags: i64,
 }
+
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+const _: [(); 1088] = [(); std::mem::size_of::<kinfo_proc>()];
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -131,7 +137,7 @@ pub struct filestat_list {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct sockaddr_storage {
     pub ss_len: u8,
     pub ss_family: u8,
@@ -141,21 +147,85 @@ pub struct sockaddr_storage {
 }
 
 #[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct kinfo_file_socket_compat {
+    pub kf_vnode_type: c_int,
+    pub kf_sock_domain: c_int,
+    pub kf_sock_type: c_int,
+    pub kf_sock_protocol: c_int,
+    pub kf_sa_local: sockaddr_storage,
+    pub kf_sa_peer: sockaddr_storage,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct kinfo_file_socket {
+    pub kf_sock_sendq: u32,
+    pub kf_sock_domain0: c_int,
+    pub kf_sock_type0: c_int,
+    pub kf_sock_protocol0: c_int,
+    pub kf_sa_local: sockaddr_storage,
+    pub kf_sa_peer: sockaddr_storage,
+    pub kf_sock_pcb: u64,
+    pub kf_sock_inpcb: u64,
+    pub kf_sock_unpconn: u64,
+    pub kf_sock_snd_sb_state: u16,
+    pub kf_sock_rcv_sb_state: u16,
+    pub kf_sock_recvq: u32,
+}
+
+#[repr(C)]
 #[derive(Copy, Clone)]
-pub struct sockstat {
-    pub so_addr: u64,
-    pub so_pcb: u64,
-    pub unp_conn: u64,
-    pub dom_family: c_int,
-    pub proto: c_int,
-    pub so_rcv_sb_state: c_int,
-    pub so_snd_sb_state: c_int,
-    pub sa_local: sockaddr_storage,
-    pub sa_peer: sockaddr_storage,
-    pub sock_type: c_int,
-    pub dname: [c_char; 32],
-    pub sendq: c_uint,
-    pub recvq: c_uint,
+pub union kinfo_file_nested_union {
+    pub kf_sock: kinfo_file_socket,
+    pub raw: [u8; 304],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union kinfo_file_union {
+    pub compat: kinfo_file_socket_compat,
+    pub nested: kinfo_file_nested_union,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct kinfo_file {
+    pub kf_structsize: c_int,
+    pub kf_type: c_int,
+    pub kf_fd: c_int,
+    pub kf_ref_count: c_int,
+    pub kf_flags: c_int,
+    pub kf_pad0: c_int,
+    pub kf_offset: i64,
+    pub kf_un: kinfo_file_union,
+    pub kf_status: u16,
+    pub kf_pad1: u16,
+    pub kf_ispare0: c_int,
+    pub kf_cap_rights: [u64; 2],
+    pub kf_cap_spare: u64,
+    pub kf_path: [c_char; PATH_MAX],
+}
+
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+const _: [(); 1392] = [(); std::mem::size_of::<kinfo_file>()];
+
+impl kinfo_file {
+    pub unsafe fn socket_family(&self) -> c_int {
+        unsafe { self.kf_un.nested.kf_sock.kf_sock_domain0 }
+    }
+
+    pub unsafe fn socket_protocol(&self) -> c_int {
+        unsafe { self.kf_un.nested.kf_sock.kf_sock_protocol0 }
+    }
+
+    pub unsafe fn socket_local_addr(&self) -> &sockaddr_storage {
+        unsafe { &self.kf_un.nested.kf_sock.kf_sa_local }
+    }
+
+    pub unsafe fn socket_peer_addr(&self) -> &sockaddr_storage {
+        unsafe { &self.kf_un.nested.kf_sock.kf_sa_peer }
+    }
 }
 
 pub const PS_FST_TYPE_SOCKET: c_int = 3;
@@ -170,16 +240,6 @@ unsafe extern "C" {
         count: *mut c_uint,
     ) -> *mut kinfo_proc;
     pub fn procstat_freeprocs(procstat: *mut procstat, p: *mut kinfo_proc);
-    pub fn procstat_getfiles(
-        procstat: *mut procstat,
-        kp: *mut kinfo_proc,
-        mmapped: c_int,
-    ) -> *mut filestat_list;
-    pub fn procstat_freefiles(procstat: *mut procstat, head: *mut filestat_list);
-    pub fn procstat_get_socket_info(
-        procstat: *mut procstat,
-        fst: *mut filestat,
-        sock: *mut sockstat,
-        errbuf: *mut c_char,
-    ) -> c_int;
+    pub fn kinfo_getfile(pid: c_int, cntp: *mut c_int) -> *mut kinfo_file;
+    pub fn free(ptr: *mut c_void);
 }
