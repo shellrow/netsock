@@ -9,19 +9,8 @@ use windows_sys::Win32::Foundation::FALSE;
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, PROCESSENTRY32, Process32First, Process32Next, TH32CS_SNAPPROCESS,
+    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
-
-fn process_entry_name(process: &PROCESSENTRY32) -> Result<String, Error> {
-    let name = process.szExeFile;
-    let len = name
-        .iter()
-        .position(|&x| x == 0)
-        .ok_or_else(|| Error::FailedToListProcesses(io::Error::other("invalid process name")))?;
-    String::from_utf8(name[0..len].iter().map(|e| *e as u8).collect()).map_err(|err| {
-        Error::FailedToListProcesses(io::Error::new(io::ErrorKind::InvalidData, err))
-    })
-}
 
 pub fn get_process_names() -> Result<HashMap<u32, String>, Error> {
     let h = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
@@ -38,24 +27,36 @@ pub fn get_process_names() -> Result<HashMap<u32, String>, Error> {
     }
     let _guard = HandleGuard(h);
 
-    let mut process = unsafe { zeroed::<PROCESSENTRY32>() };
-    process.dwSize = u32::try_from(size_of::<PROCESSENTRY32>())
+    let mut process = unsafe { zeroed::<PROCESSENTRY32W>() };
+    process.dwSize = u32::try_from(size_of::<PROCESSENTRY32W>())
         .map_err(|err| Error::FailedToListProcesses(io::Error::other(err)))?;
 
     unsafe {
-        if Process32First(h, &mut process) == FALSE {
+        if Process32FirstW(h, &mut process) == FALSE {
             return Err(Error::FailedToListProcesses(io::Error::last_os_error()));
         }
     }
 
     let mut processes = HashMap::new();
     loop {
-        if let Ok(name) = process_entry_name(&process) {
-            processes.insert(process.th32ProcessID, name);
-        }
+        let name = &process.szExeFile;
+        let len = name
+            .iter()
+            .position(|&unit| unit == 0)
+            .unwrap_or(name.len());
+        processes.insert(
+            process.th32ProcessID,
+            String::from_utf16_lossy(&name[..len]),
+        );
 
         unsafe {
-            if Process32Next(h, &mut process) == FALSE {
+            if Process32NextW(h, &mut process) == FALSE {
+                let error = io::Error::last_os_error();
+                if error.raw_os_error()
+                    != Some(windows_sys::Win32::Foundation::ERROR_NO_MORE_FILES as i32)
+                {
+                    return Err(Error::FailedToListProcesses(error));
+                }
                 break;
             }
         }
