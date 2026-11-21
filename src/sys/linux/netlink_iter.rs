@@ -1,10 +1,10 @@
 use crate::error::*;
 use crate::socket::{ProtocolSocketInfo, SocketInfo, TcpSocketInfo, UdpSocketInfo};
 use crate::state::TcpState;
-use log::warn;
+use std::io;
 
 use netlink_packet_core::{
-    NLM_F_DUMP, NLM_F_REQUEST, NetlinkHeader, NetlinkMessage, NetlinkPayload,
+    NLM_F_DUMP, NLM_F_DUMP_INTR, NLM_F_REQUEST, NetlinkHeader, NetlinkMessage, NetlinkPayload,
 };
 use netlink_packet_sock_diag::inet::InetResponse;
 use netlink_packet_sock_diag::{
@@ -14,21 +14,18 @@ use netlink_packet_sock_diag::{
 };
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_SOCK_DIAG};
 
-const SOCKET_BUFFER_SIZE: usize = 8192;
-
 pub struct NetlinkIterator {
     protocol: u8,
-    recv_buf: [u8; SOCKET_BUFFER_SIZE],
+    recv_buf: Vec<u8>,
     socket: Socket,
     offset: usize,
-    size: usize,
     is_done: bool,
 }
 
 impl NetlinkIterator {
     pub fn new(family: u8, protocol: u8) -> Result<Self, Error> {
         let mut socket = Socket::new(NETLINK_SOCK_DIAG)?;
-        let _port_number = socket.bind_auto()?.port_number();
+        socket.bind_auto()?;
         socket.connect(&SocketAddr::new(0, 0))?;
 
         let mut nl_hdr = NetlinkHeader::default();
@@ -40,7 +37,11 @@ impl NetlinkIterator {
                 protocol,
                 extensions: ExtensionFlags::empty(),
                 states: StateFlags::all(),
-                socket_id: SocketId::new_v4(),
+                socket_id: if family == AF_INET6 {
+                    SocketId::new_v6()
+                } else {
+                    SocketId::new_v4()
+                },
             })
             .into(),
         );
@@ -54,9 +55,8 @@ impl NetlinkIterator {
         Ok(NetlinkIterator {
             protocol,
             socket,
-            recv_buf: [0u8; SOCKET_BUFFER_SIZE],
+            recv_buf: Vec::new(),
             offset: 0,
-            size: 0,
             is_done: false,
         })
     }
@@ -67,43 +67,53 @@ impl NetlinkIterator {
         }
 
         loop {
-            if self.offset >= self.size {
-                self.size = self.socket.recv(&mut &mut self.recv_buf[..], 0)?;
+            if self.offset >= self.recv_buf.len() {
+                let (data, sender) = loop {
+                    match self.socket.recv_from_full() {
+                        Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                        result => break result?,
+                    }
+                };
+                if sender.port_number() != 0 {
+                    continue;
+                }
+                self.recv_buf = data;
                 self.offset = 0;
             }
 
-            let bytes = &self.recv_buf[self.offset..self.size];
-
-            let rx_packet: NetlinkMessage<SockDiagMessage> = match NetlinkMessage::deserialize(
-                bytes,
-            ) {
-                Ok(rx_packet) => rx_packet,
-                Err(e) => {
-                    warn!(
-                        "Failed to deserialize netlink message for protocol {} ({} bytes remaining): {e}",
-                        self.protocol,
-                        bytes.len()
-                    );
-                    self.offset = self.size;
-                    continue;
-                }
-            };
-            self.offset += rx_packet.header.length as usize;
-
-            match rx_packet.payload {
+            let packet =
+                NetlinkMessage::<SockDiagMessage>::deserialize(&self.recv_buf[self.offset..])
+                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+            self.offset += (packet.header.length as usize).next_multiple_of(4);
+            if packet.header.flags & NLM_F_DUMP_INTR != 0 {
+                return Err(
+                    io::Error::new(io::ErrorKind::Interrupted, "netlink dump interrupted").into(),
+                );
+            }
+            match packet.payload {
                 NetlinkPayload::Noop => {}
                 NetlinkPayload::InnerMessage(SockDiagMessage::InetResponse(response)) => {
                     return Ok(Some(parse_diag_msg(&response, self.protocol)?));
                 }
-                NetlinkPayload::Done(_) => {
+                NetlinkPayload::Done(done) => {
+                    if done.code != 0 {
+                        return Err(io::Error::from_raw_os_error(done.code.saturating_abs()).into());
+                    }
                     self.is_done = true;
                     return Ok(None);
                 }
                 NetlinkPayload::Error(err) => {
-                    self.is_done = true;
-                    return Err(Error::NetLinkPacketError(err));
+                    if err.code.is_some() {
+                        return Err(io::Error::from(err).into());
+                    }
                 }
-                _ => return Ok(None),
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "unexpected netlink dump response",
+                    )
+                    .into());
+                }
             }
         }
     }
@@ -113,7 +123,11 @@ impl Iterator for NetlinkIterator {
     type Item = Result<SocketInfo, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.try_read_next_packet().transpose()
+        let result = self.try_read_next_packet();
+        if result.is_err() {
+            self.is_done = true;
+        }
+        result.transpose()
     }
 }
 
@@ -145,8 +159,45 @@ fn parse_diag_msg(diag_msg: &InetResponse, protocol: u8) -> Result<SocketInfo, E
             inode: diag_msg.header.inode,
             uid: diag_msg.header.uid,
         },
-        _ => return Err(Error::UnknownProtocol(protocol)),
+        _ => {
+            return Err(
+                io::Error::new(io::ErrorKind::InvalidData, "unexpected socket protocol").into(),
+            );
+        }
     };
 
     Ok(sock_info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use netlink_packet_core::DoneMessage;
+
+    #[test]
+    fn interrupted_and_failed_dumps_report_one_error() {
+        for (flags, code, kind) in [
+            (NLM_F_DUMP_INTR, 0, io::ErrorKind::Interrupted),
+            (0, -13, io::ErrorKind::PermissionDenied),
+        ] {
+            let mut header = NetlinkHeader::default();
+            header.flags = flags;
+            let mut done = DoneMessage::default();
+            done.code = code;
+            let mut packet =
+                NetlinkMessage::<SockDiagMessage>::new(header, NetlinkPayload::Done(done));
+            packet.finalize();
+            let mut recv_buf = vec![0; packet.buffer_len()];
+            packet.serialize(&mut recv_buf);
+            let mut iterator = NetlinkIterator {
+                protocol: IPPROTO_TCP,
+                recv_buf,
+                socket: Socket::new(NETLINK_SOCK_DIAG).unwrap(),
+                offset: 0,
+                is_done: false,
+            };
+            assert!(matches!(iterator.next(), Some(Err(Error::OsError(e))) if e.kind() == kind));
+            assert!(iterator.next().is_none());
+        }
+    }
 }

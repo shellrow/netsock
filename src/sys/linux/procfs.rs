@@ -1,4 +1,3 @@
-use log::warn;
 use std::collections::HashMap;
 use std::fs::{read_dir, read_link};
 use std::sync::Arc;
@@ -6,31 +5,20 @@ use std::sync::Arc;
 use crate::error::Error;
 use crate::process::Process;
 
-pub fn get_process_name(pid: u32) -> String {
-    let path_buf = match read_link(format!("/proc/{}/exe", pid)) {
-        Ok(path_buf) => path_buf,
-        Err(_) => {
-            return String::new();
-        }
-    };
-    match path_buf.file_name() {
-        Some(os_str) => os_str.to_string_lossy().to_string(),
-        None => String::new(),
-    }
+fn get_process_name(pid: u32) -> String {
+    read_link(format!("/proc/{pid}/exe"))
+        .ok()
+        .and_then(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_default()
 }
 
-pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
+fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
     let entries = read_dir("/proc/").map_err(Error::FailedToListProcesses)?;
     let mut pid_by_inode: HashMap<u32, Vec<Process>> = HashMap::new();
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(err) => {
-                warn!("Failed to read /proc entry: {err}");
-                continue;
-            }
-        };
-
+    for entry in entries.flatten() {
         let pid = match entry
             .file_name()
             .to_str()
@@ -44,27 +32,13 @@ pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
 
         let fd_entries = match read_dir(entry.path().join("fd")) {
             Ok(entries) => entries,
-            Err(err) => {
-                warn!("Failed to read file descriptors for pid {pid}: {err}");
-                continue;
-            }
+            Err(_) => continue,
         };
 
-        for fd in fd_entries {
-            let fd = match fd {
-                Ok(fd) => fd,
-                Err(err) => {
-                    warn!("Failed to inspect descriptor for pid {pid}: {err}");
-                    continue;
-                }
-            };
-
+        for fd in fd_entries.flatten() {
             let link_path = match read_link(fd.path()) {
                 Ok(path) => path,
-                Err(err) => {
-                    warn!("Failed to read descriptor link for pid {pid}: {err}");
-                    continue;
-                }
+                Err(_) => continue,
             };
 
             let link_str = match link_path.to_str() {
@@ -77,8 +51,13 @@ pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
                 .and_then(|rest| rest.strip_suffix(']'))
                 .and_then(|inode| inode.parse::<u32>().ok())
             {
+                let owners = pid_by_inode.entry(inode).or_default();
+                // All descriptors for this PID are visited together.
+                if owners.last().is_some_and(|owner| owner.pid == pid) {
+                    continue;
+                }
                 let name = process_name.get_or_insert_with(|| get_process_name(pid));
-                pid_by_inode.entry(inode).or_default().push(Process {
+                owners.push(Process {
                     pid,
                     name: name.clone(),
                 });
@@ -89,22 +68,26 @@ pub fn build_inode_proc_map() -> Result<HashMap<u32, Vec<Process>>, Error> {
     Ok(pid_by_inode)
 }
 
+/// Snapshot of the visible process owners indexed by socket inode. Clones share storage.
 #[derive(Clone, Default)]
 pub struct ProcessCache {
     inner: Arc<HashMap<u32, Arc<[Process]>>>,
 }
 
 impl ProcessCache {
+    /// Scans the accessible process descriptors in `/proc`.
     pub fn snapshot() -> Result<Self, Error> {
         let map = build_inode_proc_map()?;
         Ok(Self::from_map(map))
     }
 
+    /// Replaces this snapshot after a successful scan. Existing clones keep their data.
     pub fn refresh(&mut self) -> Result<(), Error> {
         *self = Self::snapshot()?;
         Ok(())
     }
 
+    /// Copies the visible owners of an inode, or returns an empty vector.
     pub fn clone_processes(&self, inode: u32) -> Vec<Process> {
         self.inner
             .get(&inode)
@@ -112,6 +95,7 @@ impl ProcessCache {
             .unwrap_or_default()
     }
 
+    /// Returns shared ownership data for an inode present in this snapshot.
     pub fn processes(&self, inode: u32) -> Option<Arc<[Process]>> {
         self.inner.get(&inode).cloned()
     }
