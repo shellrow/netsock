@@ -7,6 +7,6 @@ use serde::{Deserialize, Serialize};
 pub struct Process {
     /// Process identifier.
     pub pid: u32,
-    /// Process name as reported by the operating system.
+    /// Process name as reported by the operating system, or an empty string if unavailable.
     pub name: String,
 }
