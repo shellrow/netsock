@@ -2,39 +2,37 @@
 name = "netsock"
 version = "0.8.0"
 edition = "2024"
+rust-version = "1.88"
 authors = ["shellrow <shellrow@foctal.com>"]
-description = "Cross-platform library for network sockets information"
+description = "Inspect TCP and UDP sockets and their owning processes"
 readme = "README.md"
 repository = "https://github.com/shellrow/netsock"
 documentation = "https://docs.rs/netsock"
 license = "MIT"
+include = ["/src/**", "/examples/**", "/tests/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE"]
 keywords = ["network", "socket"]
 categories = ["network-programming", "os"]
 
 [package.metadata.docs.rs]
 all-features = true
 default-target = "x86_64-unknown-linux-gnu"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-freebsd"]
 
 [dependencies]
 bitflags = "2.11"
 thiserror = "2.0"
-log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 
-[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
-netlink-sys = "0.8"
-netlink-packet-core = "0.7"
-netlink-packet-utils = "0.5"
-netlink-packet-sock-diag = "0.4"
+[build-dependencies]
+cc = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+netlink-sys = "0.9"
+netlink-packet-core = "0.9"
+netlink-packet-sock-diag = "0.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-num-derive = "0.4"
-num-traits = "0.2"
-libproc = "0.14"
-
-[target.'cfg(target_os = "freebsd")'.build-dependencies]
-
-[target.'cfg(target_os = "freebsd")'.dependencies]
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.61"
