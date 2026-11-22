@@ -5,7 +5,7 @@ impl From<u8> for TcpState {
         match tcp_state {
             1 => TcpState::Established,
             2 => TcpState::SynSent,
-            3 => TcpState::SynReceived,
+            3 | 12 => TcpState::SynReceived,
             4 => TcpState::FinWait1,
             5 => TcpState::FinWait2,
             6 => TcpState::TimeWait,

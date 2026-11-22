@@ -1,26 +1,9 @@
-// Linux
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
-pub use linux::*;
+#[cfg(any(target_os = "freebsd", target_os = "macos"))]
+mod bsd;
+#[cfg_attr(target_os = "linux", path = "linux/mod.rs")]
+#[cfg_attr(target_os = "windows", path = "windows/mod.rs")]
+#[cfg_attr(target_os = "macos", path = "macos/mod.rs")]
+#[cfg_attr(target_os = "freebsd", path = "freebsd/mod.rs")]
+mod platform;
 
-// macOS
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::*;
-
-// FreeBSD
-#[cfg(target_os = "freebsd")]
-mod freebsd;
-#[cfg(target_os = "freebsd")]
-pub use freebsd::*;
-
-// Windows
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-pub use windows::*;
-
-mod shared;
-pub use shared::*;
+pub use platform::*;

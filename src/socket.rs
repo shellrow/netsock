@@ -16,11 +16,11 @@ pub struct SocketInfo {
     pub protocol_socket_info: ProtocolSocketInfo,
     /// Processes currently associated with the socket.
     pub processes: Vec<Process>,
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Socket inode on Linux/Android.
+    #[cfg(target_os = "linux")]
+    /// Socket inode on Linux.
     pub inode: u32,
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Owning user ID on Linux/Android.
+    #[cfg(target_os = "linux")]
+    /// Owning user ID on Linux.
     pub uid: u32,
 }
 
@@ -213,7 +213,7 @@ impl SocketQuery {
         self
     }
 
-    /// Returns `true` when the socket satisfies all configured criteria.
+    /// Returns `true` when all criteria match. PID and name must match the same owner.
     pub fn matches(&self, socket: &SocketInfo) -> bool {
         if let Some(flags) = self.protocol_flags
             && !socket.matches_protocol_flags(flags)
@@ -257,18 +257,15 @@ impl SocketQuery {
             return false;
         }
 
-        if let Some(pid) = self.owner_pid
-            && !socket.is_owned_by_pid(pid)
-        {
-            return false;
+        if self.owner_pid.is_some() || self.process_name.is_some() {
+            return socket.processes.iter().any(|owner| {
+                self.owner_pid.is_none_or(|pid| owner.pid == pid)
+                    && self
+                        .process_name
+                        .as_ref()
+                        .is_none_or(|name| owner.name == *name)
+            });
         }
-
-        if let Some(name) = &self.process_name
-            && !socket.processes.iter().any(|process| &process.name == name)
-        {
-            return false;
-        }
-
         true
     }
 }
@@ -329,9 +326,9 @@ mod tests {
                 pid: 42,
                 name: "demo".into(),
             }],
-            #[cfg(any(target_os = "linux", target_os = "android"))]
+            #[cfg(target_os = "linux")]
             inode: 1,
-            #[cfg(any(target_os = "linux", target_os = "android"))]
+            #[cfg(target_os = "linux")]
             uid: 1000,
         }
     }
@@ -346,9 +343,9 @@ mod tests {
                 pid: 7,
                 name: "resolver".into(),
             }],
-            #[cfg(any(target_os = "linux", target_os = "android"))]
+            #[cfg(target_os = "linux")]
             inode: 2,
-            #[cfg(any(target_os = "linux", target_os = "android"))]
+            #[cfg(target_os = "linux")]
             uid: 1001,
         }
     }
@@ -443,10 +440,40 @@ mod tests {
     }
 
     #[test]
+    fn owner_criteria_must_match_the_same_process() {
+        let mut socket = tcp_socket();
+        socket.processes.push(Process {
+            pid: 7,
+            name: "other".into(),
+        });
+        assert!(
+            !SocketQuery::new()
+                .with_owner_pid(42)
+                .with_process_name("other")
+                .matches(&socket)
+        );
+        assert!(
+            SocketQuery::new()
+                .with_owner_pid(7)
+                .with_process_name("other")
+                .matches(&socket)
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn socket_records_round_trip_with_serde() {
+        for socket in [tcp_socket(), udp_socket()] {
+            let json = serde_json::to_string(&socket).unwrap();
+            assert_eq!(serde_json::from_str::<SocketInfo>(&json).unwrap(), socket);
+        }
+    }
+
+    #[test]
     fn filter_by_query_skips_non_matches_and_preserves_errors() {
         let items = vec![
             Ok(udp_socket()),
-            Err(Error::NotAValidSocket),
+            Err(Error::OsError(std::io::Error::other("test error"))),
             Ok(tcp_socket()),
         ];
         let mut iter = items.into_iter().filter_by_query(
@@ -455,7 +482,7 @@ mod tests {
                 .with_local_port(8080),
         );
 
-        assert!(matches!(iter.next(), Some(Err(Error::NotAValidSocket))));
+        assert!(matches!(iter.next(), Some(Err(Error::OsError(_)))));
         assert!(matches!(
             iter.next(),
             Some(Ok(SocketInfo {

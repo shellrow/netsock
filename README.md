@@ -5,96 +5,75 @@
 [doc-url]: https://docs.rs/netsock/latest/netsock
 
 # netsock [![Crates.io][crates-badge]][crates-url] ![License][license-badge]
-Cross-platform library for inspecting network sockets and owning processes.
 
-## Features
-- TCP and UDP socket inspection
-- IPv4 and IPv6 support
-- Optional process ownership information
-- Iterator and query-based filtering API
-- Optional `serde` support for serializing socket data
+Inspect IPv4 and IPv6 TCP and UDP sockets and their owning processes on Linux,
+macOS, Windows, and FreeBSD. Requires Rust 1.88 or later. Builds for macOS and
+FreeBSD also need a C compiler and the target system headers.
 
-## Supported Platforms
-- Linux
-- macOS
-- Windows
-- FreeBSD
+## Install
 
-## Installation
-Add `netsock` to your dependencies:
+```sh
+cargo add netsock
+```
+
+or
 
 ```toml
 [dependencies]
-netsock = "0.8"
+netsock = "0.9"
 ```
 
-Enable serde support if needed:
+## Usage
 
-```toml
-[dependencies]
-netsock = { version = "0.8", features = ["serde"] }
-```
+List TCP listeners on port 443 and print their local endpoints and visible owners.
 
-See [examples][examples-url] and [API docs][doc-url] for more details.
-
-## Basic Example
 ```rust
-use netsock::family::AddressFamilyFlags;
-use netsock::get_sockets;
-use netsock::protocol::ProtocolFlags;
-use netsock::socket::ProtocolSocketInfo;
+use std::net::SocketAddr;
 
-fn main() {
-    let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
-    let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
-
-    match get_sockets(af_flags, proto_flags) {
-        Ok(sockets) => {
-            for socket in sockets {
-                match socket.protocol_socket_info {
-                    ProtocolSocketInfo::Tcp(tcp_socket) => println!(
-                        "[TCP] {}:{} -> {}:{} {:?} ({})",
-                        tcp_socket.local_addr,
-                        tcp_socket.local_port,
-                        tcp_socket.remote_addr,
-                        tcp_socket.remote_port,
-                        tcp_socket.state,
-                        socket.processes.len()
-                    ),
-                    ProtocolSocketInfo::Udp(udp_socket) => println!(
-                        "[UDP] {}:{} ({})",
-                        udp_socket.local_addr,
-                        udp_socket.local_port,
-                        socket.processes.len()
-                    ),
-                }
-            }
-        }
-        Err(err) => eprintln!("error: {err}"),
-    }
-}
-```
-
-## Query Filtering Example
-```rust
 use netsock::family::AddressFamilyFlags;
 use netsock::iter_sockets;
 use netsock::protocol::ProtocolFlags;
 use netsock::socket::{SocketIteratorExt, SocketQuery};
+use netsock::state::TcpState;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let query = SocketQuery::new().with_local_port(443);
+fn main() -> Result<(), netsock::error::Error> {
+    let query = SocketQuery::new()
+        .with_local_port(443)
+        .with_tcp_state(TcpState::Listen);
 
-    for socket in iter_sockets(AddressFamilyFlags::all(), ProtocolFlags::TCP)?
-        .filter_by_query(query)
-    {
-        println!("{:?}", socket?);
+    let sockets = iter_sockets(AddressFamilyFlags::all(), ProtocolFlags::TCP)?;
+    for result in sockets.filter_by_query(query) {
+        let socket = result?;
+        let endpoint = SocketAddr::new(socket.local_addr(), socket.local_port());
+        println!("{endpoint} {:?}", socket.processes);
     }
-
     Ok(())
 }
 ```
 
-## Related Crates
-- [netstat](https://crates.io/crates/netstat) (unmaintained)
-- [netstat2](https://crates.io/crates/netstat2)
+Use `get_sockets` to collect all matching rows, or `iter_sockets_without_processes`
+to skip ownership lookup. Both take address family and protocol flags. An empty
+selection returns no sockets. The optional `serde` feature enables serialization
+and deserialization of socket records.
+
+## Platform behavior
+
+| Platform | Socket source | Process information |
+| --- | --- | --- |
+| Linux | Socket diagnostics via netlink in the current network namespace | Accessible descriptors in `/proc`, matched by inode |
+| macOS | Socket descriptors visible through libproc | Processes holding those descriptors |
+| Windows | TCP and UDP tables from IP Helper | Owner PID from the table and executable name from Tool Help |
+| FreeBSD | TCP and UDP protocol control blocks from sysctl | Visible file descriptors matched to kernel socket records |
+
+Enumeration spans multiple system calls. Sockets may close and PIDs may be
+reused during a scan. An empty owner list means no owner was observed, and an
+empty process name means the name was unavailable. On macOS, inaccessible
+processes also limit which sockets can be returned. Linux callers can reuse a
+`ProcessCache` across scans and refresh it when they need newer ownership data.
+
+TCP rows include both endpoints and the connection state. UDP rows report only
+the local endpoint. IP addresses do not carry IPv6 scope IDs. Linux records
+also include the socket inode and UID. Deserializing a Linux record requires
+both fields.
+
+See [examples][examples-url] and [API docs][doc-url] for more details.

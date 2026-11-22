@@ -2,65 +2,27 @@ mod ext;
 mod netlink_iter;
 mod procfs;
 
+use self::netlink_iter::NetlinkIterator;
 use crate::error::Error;
 use crate::family::AddressFamilyFlags;
 use crate::protocol::ProtocolFlags;
 use crate::socket::SocketInfo;
-use crate::sys::linux::netlink_iter::*;
 use netlink_packet_sock_diag::{AF_INET, AF_INET6, IPPROTO_TCP, IPPROTO_UDP};
 pub use procfs::ProcessCache;
 
-struct ProcessAttached<I> {
-    inner: I,
-    cache: ProcessCache,
-}
-
-impl<I> Iterator for ProcessAttached<I>
-where
-    I: Iterator<Item = Result<SocketInfo, Error>>,
-{
-    type Item = Result<SocketInfo, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|result| {
-            result.map(|socket_info| SocketInfo {
-                processes: self.cache.clone_processes(socket_info.inode),
-                ..socket_info
-            })
-        })
-    }
-}
-
-/// Returns sockets with process ownership attached.
-///
-/// This function combines raw socket enumeration with a [`ProcessCache`] snapshot
-/// so each returned socket includes associated processes.
-///
-/// # Examples
-/// ```
-/// use netsock::family::AddressFamilyFlags;
-/// use netsock::iter_sockets;
-/// use netsock::protocol::ProtocolFlags;
-///
-/// let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
-/// let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
-///
-/// if let Ok(socket_iter) = iter_sockets(af_flags, proto_flags) {
-///     for socket_info in socket_iter {
-///         match socket_info {
-///             Ok(info) => println!("Found socket: {:?}", info),
-///             Err(e) => eprintln!("Error fetching socket info: {:?}", e),
-///         }
-///     }
-/// }
-/// ```
+/// Enumerates matching sockets and attaches the owners visible through procfs.
 pub fn iter_sockets(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
-    let sockets = iter_sockets_without_processes(af_flags, proto_flags)?;
-    let cache = ProcessCache::snapshot()?;
-    Ok(attach_processes(sockets, cache))
+    let cache = if af_flags.intersects(AddressFamilyFlags::all())
+        && proto_flags.intersects(ProtocolFlags::all())
+    {
+        ProcessCache::snapshot()?
+    } else {
+        ProcessCache::default()
+    };
+    iter_sockets_with_cache(af_flags, proto_flags, cache)
 }
 
 /// Returns sockets with process ownership attached using a prebuilt cache.
@@ -72,7 +34,12 @@ pub fn iter_sockets_with_cache(
     cache: ProcessCache,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
     let sockets = iter_sockets_without_processes(af_flags, proto_flags)?;
-    Ok(attach_processes(sockets, cache))
+    Ok(sockets.map(move |row| {
+        row.map(|mut socket| {
+            socket.processes = cache.clone_processes(socket.inode);
+            socket
+        })
+    }))
 }
 
 /// Returns sockets without process ownership data.
@@ -80,36 +47,21 @@ pub fn iter_sockets_without_processes(
     af_flags: AddressFamilyFlags,
     proto_flags: ProtocolFlags,
 ) -> Result<impl Iterator<Item = Result<SocketInfo, Error>>, Error> {
-    let ipv4 = af_flags.contains(AddressFamilyFlags::IPV4);
-    let ipv6 = af_flags.contains(AddressFamilyFlags::IPV6);
-    let tcp = proto_flags.contains(ProtocolFlags::TCP);
-    let udp = proto_flags.contains(ProtocolFlags::UDP);
     let mut iterators = Vec::with_capacity(4);
-    if ipv4 {
-        if tcp {
-            iterators.push(NetlinkIterator::new(AF_INET, IPPROTO_TCP)?);
-        }
-        if udp {
-            iterators.push(NetlinkIterator::new(AF_INET, IPPROTO_UDP)?);
-        }
-    }
-    if ipv6 {
-        if tcp {
-            iterators.push(NetlinkIterator::new(AF_INET6, IPPROTO_TCP)?);
-        }
-        if udp {
-            iterators.push(NetlinkIterator::new(AF_INET6, IPPROTO_UDP)?);
+    for (flag, family) in [
+        (AddressFamilyFlags::IPV4, AF_INET),
+        (AddressFamilyFlags::IPV6, AF_INET6),
+    ] {
+        if af_flags.contains(flag) {
+            for (flag, protocol) in [
+                (ProtocolFlags::TCP, IPPROTO_TCP),
+                (ProtocolFlags::UDP, IPPROTO_UDP),
+            ] {
+                if proto_flags.contains(flag) {
+                    iterators.push(NetlinkIterator::new(family, protocol)?);
+                }
+            }
         }
     }
     Ok(iterators.into_iter().flatten())
-}
-
-fn attach_processes<I>(sockets_info: I, cache: ProcessCache) -> ProcessAttached<I>
-where
-    I: Iterator<Item = Result<SocketInfo, Error>>,
-{
-    ProcessAttached {
-        inner: sockets_info,
-        cache,
-    }
 }
