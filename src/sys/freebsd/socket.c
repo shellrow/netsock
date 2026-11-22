@@ -36,7 +36,7 @@ static int read_table(const char *name, void **data, size_t *len) {
 }
 
 typedef void (*row_callback)(void *, const struct netsock_row *);
-int netsock_pcbs(int tcp, void *ctx, row_callback visit) {
+int netsock_pcbs(int tcp, int ipv4, int ipv6, void *ctx, row_callback visit) {
     void *data;
     size_t len;
     int error = read_table(tcp ? "net.inet.tcp.pcblist" : "net.inet.udp.pcblist", &data, &len);
@@ -73,10 +73,12 @@ int netsock_pcbs(int tcp, void *ctx, row_callback visit) {
         row.local_port = ntohs(in->inp_lport);
         row.remote_port = ntohs(in->inp_fport);
         if (in->inp_vflag & INP_IPV6) {
+            if (!ipv6)
+                continue;
             row.ipv6 = 1;
             memcpy(row.local, &in->in6p_laddr, 16);
             memcpy(row.remote, &in->in6p_faddr, 16);
-        } else if (in->inp_vflag & INP_IPV4) {
+        } else if (ipv4 && (in->inp_vflag & INP_IPV4)) {
             memcpy(row.local, &in->inp_laddr, 4);
             memcpy(row.remote, &in->inp_faddr, 4);
         } else {

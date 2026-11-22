@@ -11,22 +11,28 @@ pub mod state;
     target_os = "linux",
     target_os = "macos",
     windows,
-    target_os = "freebsd"
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
 )))]
-compile_error!("netsock supports Linux, macOS, Windows, and FreeBSD");
+compile_error!("netsock supports Linux, macOS, Windows, FreeBSD, NetBSD, and OpenBSD");
 
 #[cfg(any(
     target_os = "linux",
     target_os = "macos",
     windows,
-    target_os = "freebsd"
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
 ))]
 mod sys;
 #[cfg(any(
     target_os = "linux",
     target_os = "macos",
     windows,
-    target_os = "freebsd"
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
 ))]
 pub use sys::{iter_sockets, iter_sockets_without_processes};
 
@@ -41,7 +47,9 @@ pub use sys::{ProcessCache, iter_sockets_with_cache};
     target_os = "linux",
     target_os = "macos",
     windows,
-    target_os = "freebsd"
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
 ))]
 pub fn get_sockets(
     families: family::AddressFamilyFlags,

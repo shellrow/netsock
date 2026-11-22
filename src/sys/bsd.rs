@@ -9,13 +9,13 @@ use std::net::{IpAddr, Ipv4Addr};
 #[derive(Default)]
 pub(super) struct SocketRow {
     pub id: u64,
-    local: [u8; 16],
-    remote: [u8; 16],
-    local_port: u16,
-    remote_port: u16,
+    pub(super) local: [u8; 16],
+    pub(super) remote: [u8; 16],
+    pub(super) local_port: u16,
+    pub(super) remote_port: u16,
     state: i32,
-    ipv6: u8,
-    tcp: u8,
+    pub(super) ipv6: u8,
+    pub(super) tcp: u8,
 }
 
 impl SocketRow {
