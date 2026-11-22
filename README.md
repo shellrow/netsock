@@ -20,7 +20,7 @@ or
 
 ```toml
 [dependencies]
-netsock = "0.8"
+netsock = "0.9"
 ```
 
 ## Usage
