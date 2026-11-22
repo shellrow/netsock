@@ -26,20 +26,42 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --all-features
 
-  freebsd:
+  bsd:
+    name: ${{ matrix.os }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: freebsd
+            version: "14.4"
+          - os: netbsd
+            version: "10.1"
+          - os: openbsd
+            version: "7.9"
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
       - uses: cross-platform-actions/action@30cde56b87a128507bebea9531205087890ee360 # v1.8.0
         with:
-          operating_system: freebsd
-          version: "14.4"
+          operating_system: ${{ matrix.os }}
+          version: ${{ matrix.version }}
           sync_files: false
-      - name: Test on FreeBSD
+      - name: Run tests
         shell: cpa.sh {0} --sync-files runner-to-vm
         run: |
           set -eu
-          fetch -o /tmp/rustup-init https://static.rust-lang.org/rustup/dist/x86_64-unknown-freebsd/rustup-init
+          case "$(uname -s)" in
+            FreeBSD)
+              fetch -o /tmp/rustup-init https://static.rust-lang.org/rustup/dist/x86_64-unknown-freebsd/rustup-init
+              ;;
+            NetBSD)
+              ftp -o /tmp/rustup-init https://static.rust-lang.org/rustup/dist/x86_64-unknown-netbsd/rustup-init
+              ;;
+            OpenBSD)
+              sudo pkg_add rust
+              exec cargo test --all-features
+              ;;
+          esac
           chmod +x /tmp/rustup-init
           /tmp/rustup-init -y --profile minimal --default-toolchain stable
           "$HOME/.cargo/bin/cargo" test --all-features

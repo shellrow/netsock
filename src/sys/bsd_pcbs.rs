@@ -11,6 +11,8 @@ use std::io;
 unsafe extern "C" {
     fn netsock_pcbs(
         tcp: i32,
+        ipv4: i32,
+        ipv6: i32,
         ctx: *mut c_void,
         visit: extern "C" fn(*mut c_void, &SocketRow),
     ) -> i32;
@@ -77,7 +79,13 @@ fn enumerate(
         for proto in [ProtocolFlags::TCP, ProtocolFlags::UDP] {
             if protocols.contains(proto) {
                 let status = unsafe {
-                    netsock_pcbs(i32::from(proto == ProtocolFlags::TCP), ctx, add_socket)
+                    netsock_pcbs(
+                        i32::from(proto == ProtocolFlags::TCP),
+                        i32::from(families.contains(AddressFamilyFlags::IPV4)),
+                        i32::from(families.contains(AddressFamilyFlags::IPV6)),
+                        ctx,
+                        add_socket,
+                    )
                 };
                 if status != 0 {
                     return Err(io::Error::from_raw_os_error(status).into());

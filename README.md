@@ -7,8 +7,8 @@
 # netsock [![Crates.io][crates-badge]][crates-url] ![License][license-badge]
 
 Inspect IPv4 and IPv6 TCP and UDP sockets and their owning processes on Linux,
-macOS, Windows, and FreeBSD. Requires Rust 1.88 or later. Builds for macOS and
-FreeBSD also need a C compiler and the target system headers.
+macOS, Windows, FreeBSD, NetBSD, and OpenBSD. Requires Rust 1.88 or later.
+Builds for macOS and the BSDs also need a C compiler and the target system headers.
 
 ## Install
 
@@ -64,6 +64,8 @@ and deserialization of socket records.
 | macOS | Socket descriptors visible through libproc | Processes holding those descriptors |
 | Windows | TCP and UDP tables from IP Helper | Owner PID from the table and executable name from Tool Help |
 | FreeBSD | TCP and UDP protocol control blocks from sysctl | Visible file descriptors matched to kernel socket records |
+| NetBSD | IPv4 and IPv6 protocol control blocks from sysctl | Visible descriptors from `kern.file2` matched by socket identity |
+| OpenBSD | Internet sockets from `KERN_FILE_BYFILE` | PID and process name from `KERN_FILE_BYPID` |
 
 Enumeration spans multiple system calls. Sockets may close and PIDs may be
 reused during a scan. An empty owner list means no owner was observed, and an
